@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>CodeQuiz Hub - Python IDE</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.23.1/ace.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-6 h-screen overflow-hidden">
+
+    <!-- Question Panel -->
+    <div class="bg-white p-6 rounded-2xl shadow overflow-y-auto">
+      <h2 class="text-2xl font-semibold mb-4">Sample Question</h2>
+      <p class="mb-4">Write a function that returns the factorial of a number.</p>
+      <pre class="bg-gray-100 p-4 rounded text-sm"><code>def factorial(n):
+    # Your code here</code></pre>
+    </div>
+
+    <!-- IDE + Output Panel -->
+    <div class="bg-white p-6 rounded-2xl shadow flex flex-col overflow-hidden">
+      <form method="POST" class="flex flex-col h-full" onsubmit="beforeSubmit()">
+        
+        <!-- Ace Editor Box -->
+        <div id="editor" class="flex-grow w-full rounded-md border border-gray-300" style="height: 300px; font-size: 14px;"></div>
+
+        <!-- Hidden Textarea (submitted to Flask) -->
+        <textarea name="code" id="code" hidden></textarea>
+
+        <button type="submit" class="mt-4 py-2 px-6 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Run Code</button>
+      </form>
+
+      {% if output %}
+      <div class="mt-6 bg-black text-green-400 p-4 rounded-lg text-sm font-mono overflow-y-auto max-h-48">
+        <h3 class="font-bold text-white mb-2">Output:</h3>
+        <pre>{{ output }}</pre>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- JS: Sync Ace Editor to <textarea> on submit -->
+  <script>
+    const editor = ace.edit("editor");
+    editor.setTheme("ace/theme/monokai");
+    editor.session.setMode("ace/mode/python");
+    editor.setOptions({
+      enableBasicAutocompletion: true,
+      enableSnippets: true,
+      enableLiveAutocompletion: true,
+    });
+
+    // Restore code from backend (Flask)
+    editor.setValue({{ code | tojson }}, -1);
+
+    function beforeSubmit() {
+      document.getElementById("code").value = editor.getValue();
+    }
+  </script>
+
+</body>
+</html>
