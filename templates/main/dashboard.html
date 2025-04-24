@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}CodeQuiz Hub - Conduct & Participate{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="text-center w-full h-[50vh] bg-gradient-to-r from-primary to-secondary text-white flex flex-col items-center justify-center fade-in pt-20">
+    <h1 class="text-4xl font-extrabold">Conduct & Participate in Coding Quizzes</h1>
+    <p class="mt-3 text-lg px-4 md:px-0">A seamless platform for organizations to create quizzes and coding challenges.</p>
+</section>
+
+<!-- Features Section -->
+<section id="features" class="py-20 px-10 slide-in">
+    <h2 class="text-3xl font-bold text-center mb-10">Why Choose CodeQuiz Hub?</h2>
+    <div class="grid md:grid-cols-3 gap-6">
+        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
+            <h3 class="text-xl font-bold text-primary">Multiple Quiz Formats</h3>
+            <p class="mt-2">MCQ, Coding, Fill-in-the-Blanks, and Comprehension.</p>
+        </div>
+        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
+            <h3 class="text-xl font-bold text-primary">Real-time Leaderboards</h3>
+            <p class="mt-2">Live scoring and ranking for participants.</p>
+        </div>
+        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
+            <h3 class="text-xl font-bold text-primary">Integrated Coding IDE</h3>
+            <p class="mt-2">Write and run code directly in the platform.</p>
+        </div>
+    </div>
+</section>
+
+<!-- How It Works Section -->
+<section id="how-it-works" class="py-20 px-10 slide-in">
+    <h2 class="text-3xl font-bold text-center mb-10">How It Works</h2>
+    <div class="grid md:grid-cols-4 gap-6 text-center">
+        <div class="p-6 bg-white shadow-lg rounded-lg">
+            <h3 class="text-xl font-bold text-primary">1. Register</h3>
+            <p>Organizations sign up & create quizzes.</p>
+        </div>
+        <div class="p-6 bg-white shadow-lg rounded-lg">
+            <h3 class="text-xl font-bold text-primary">2. Join</h3>
+            <p>Students enroll & take quizzes.</p>
+        </div>
+        <div class="p-6 bg-white shadow-lg rounded-lg">
+            <h3 class="text-xl font-bold text-primary">3. Get Results</h3>
+            <p>Auto-grading & instant feedback.</p>
+        </div>
+        <div class="p-6 bg-white shadow-lg rounded-lg">
+            <h3 class="text-xl font-bold text-primary">4. Analyze</h3>
+            <p>Compare results & track performance.</p>
+        </div>
+    </div>
+</section>
+{% endblock %}

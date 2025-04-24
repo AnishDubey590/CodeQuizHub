@@ -1,0 +1,75 @@
+<!-- templates/organization/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}{{ organization.name }} - Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ organization.name }} - Dashboard</h1>
+    <p class="lead">Manage your students, quizzes, and results.</p>
+    <hr>
+
+     <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card text-dark bg-light mb-3">
+                 <div class="card-header">Students</div>
+                 <div class="card-body">
+                     <h5 class="card-title">{{ student_count }}</h5>
+                     <p class="card-text">Registered students in your organization.</p>
+                     <a href="#" class="btn btn-sm btn-primary disabled">Manage Students (TODO)</a>
+                 </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+             <div class="card text-dark bg-light mb-3">
+                 <div class="card-header">Quizzes</div>
+                 <div class="card-body">
+                     <h5 class="card-title">{{ quiz_count }}</h5>
+                     <p class="card-text">Quizzes created by your organization.</p>
+                     <a href="#" class="btn btn-sm btn-success disabled">Create Quiz (TODO)</a>
+                     <a href="#" class="btn btn-sm btn-info disabled">View All (TODO)</a>
+                 </div>
+            </div>
+        </div>
+         <div class="col-md-4">
+             <div class="card text-dark bg-light mb-3">
+                 <div class="card-header">Analytics</div>
+                 <div class="card-body">
+                     <h5 class="card-title">Results</h5>
+                     <p class="card-text">Analyze student performance data.</p>
+                      <a href="#" class="btn btn-sm btn-secondary disabled">View Analytics (TODO)</a>
+                 </div>
+            </div>
+        </div>
+    </div>
+
+    <h2 class="mt-5">Recent Quizzes</h2>
+    {% if recent_quizzes %}
+    <ul class="list-group">
+        {% for quiz in recent_quizzes %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>{{ quiz.title }}</strong> ({{ quiz.status.name }})
+                    <small class="d-block text-muted">Created: {{ quiz.created_at.strftime('%Y-%m-%d') }}</small>
+                </div>
+                 <span>
+                     <a href="#" class="btn btn-sm btn-outline-primary disabled">View (TODO)</a>
+                     <a href="#" class="btn btn-sm btn-outline-secondary disabled">Results (TODO)</a>
+                 </span>
+            </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No quizzes created yet.</p>
+    {% endif %}
+
+     <h2 class="mt-5">Quick Actions</h2>
+    <div class="list-group">
+        <a href="#" class="list-group-item list-group-item-action disabled">Add New Student (TODO)</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">Create New Quiz (TODO)</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">Manage Question Bank (TODO)</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">View Organization Settings (TODO)</a>
+    </div>
+
+</div>
+{% endblock %}

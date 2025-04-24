@@ -1,0 +1,54 @@
+<!-- templates/admin/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Admin Dashboard</h1>
+    <p class="lead">Platform Overview</p>
+    <hr>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card text-white bg-warning mb-3">
+                 <div class="card-header">Pending Organizations</div>
+                 <div class="card-body">
+                     <h5 class="card-title">{{ pending_org_count }}</h5>
+                     <p class="card-text">Organizations awaiting approval.</p>
+                     <a href="{{ url_for('admin.manage_organizations') }}" class="btn btn-sm btn-light">Manage</a>
+                 </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+             <div class="card text-white bg-success mb-3">
+                 <div class="card-header">Approved Organizations</div>
+                 <div class="card-body">
+                     <h5 class="card-title">{{ approved_org_count }}</h5>
+                     <p class="card-text">Active organizations on the platform.</p>
+                      <a href="{{ url_for('admin.manage_organizations') }}" class="btn btn-sm btn-light">View List</a>
+                 </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+             <div class="card text-white bg-info mb-3">
+                 <div class="card-header">Total Users</div>
+                 <div class="card-body">
+                     <h5 class="card-title">{{ total_user_count }}</h5>
+                     <p class="card-text">All registered user accounts.</p>
+                     <a href="#" class="btn btn-sm btn-light disabled">Manage Users (TODO)</a> {# Link to future user mgmt route #}
+                 </div>
+            </div>
+        </div>
+        <!-- Add more cards for Quizzes, Usage Stats etc. -->
+    </div>
+
+    <h2 class="mt-5">Quick Actions</h2>
+    <div class="list-group">
+        <a href="{{ url_for('admin.manage_organizations') }}" class="list-group-item list-group-item-action">Manage Organization Requests</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">Manage Users (TODO)</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">Platform Settings (TODO)</a>
+        <a href="#" class="list-group-item list-group-item-action disabled">View Global Analytics (TODO)</a>
+    </div>
+</div>
+{% endblock %}

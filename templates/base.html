@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}CodeQuiz Hub{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#4F46E5',
+                        secondary: '#6D28D9'
+                    },
+                    animation: {
+                        fadeIn: "fadeIn 1s ease-in-out",
+                        slideIn: "slideIn 1.5s ease-in-out",
+                        pageLoad: "pageLoad 2s ease-in-out"
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: 0 },
+                            '100%': { opacity: 1 }
+                        },
+                        slideIn: {
+                            '0%': { opacity: 0, transform: 'translateX(-50px)' },
+                            '100%': { opacity: 1, transform: 'translateX(0)' }
+                        },
+                        pageLoad: {
+                            '0%': { opacity: 1, transform: 'scale(1)' },
+                            '100%': { opacity: 1, transform: 'scale(1)' }
+                        }
+                    }
+                }
+            }
+        };
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            gsap.from("body", { opacity: 0, scale: 1, duration: 1.5, ease: "power2.out" });
+            gsap.from(".fade-in", { opacity: 0, y:20, duration: 1, stagger: 0, ease: "power2.out" });
+            gsap.from(".slide-in", { opacity: 0, x: -100, duration: 1.5, stagger: 0, ease: "power2.out" });
+        });
+    </script>
+</head>
+<body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md py-4 px-6 flex justify-between items-center fixed w-full top-0 z-50 backdrop-blur-lg bg-opacity-90 fade-in">
+        <h1 class="text-2xl font-bold text-primary">CodeQuiz Hub</h1>
+        <div class="space-x-6">
+            <a href="#features" class="text-gray-700 hover:text-primary transition-all duration-300">Features</a>
+            <a href="#how-it-works" class="text-gray-700 hover:text-primary transition-all duration-300">How It Works</a>
+            <a href="#contact" class="text-gray-700 hover:text-primary transition-all duration-300">Contact</a>
+            <a href="{{ url_for('auth.login') }}" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-all duration-500 ease-in-out transform hover:scale-105">Login</a>
+        </div>
+    </nav>
+
+    <main class="flex-grow">
+        <div>
+            {% with messages = get_flashed_messages(with_categories=true) %}
+          {% if messages %}
+          <ul class="flashes">
+            {% for category, message in messages %}
+              <li class="{{ category }}">{{ message }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+          {% endwith %}
+          </div>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-white text-center py-6 slide-in">
+        <p>&copy; 2025 CodeQuiz Hub. All rights reserved.</p>
+    </footer>
+</body>
+</html>

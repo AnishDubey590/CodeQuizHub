@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Login | CodeQuiz Hub{% endblock %}
+
+
+
+{% block content %}
+<section class="pt-32 px-6 max-w-md mx-auto fade-in">
+    <h2 class="text-3xl font-semibold text-primary mb-6">Login to Your Account</h2>
+    <form method="POST" class="bg-white p-6 rounded-lg shadow-md space-y-4">
+        <div>
+            <label for="email" class="block mb-1 text-gray-600">Email</label>
+            <input type="email" name="email" id="email" required class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <div>
+            <label for="password" class="block mb-1 text-gray-600">Password</label>
+            <input type="password" name="password" id="password" required class="w-full border px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        </div>
+        <button type="submit" class="w-full bg-primary text-white py-2 rounded-lg hover:bg-secondary transition-all duration-300">Login</button>
+    </form>
+    <div class="flex justify-between text-sm text-primary font-medium mt-4">
+      <a href="#" class="hover:underline">Register as Organisation</a>
+      <a href="{{url_for('auth.register')}}" class="hover:underline">Register as Individual</a>
+    </div>
+</section>
+{% endblock %}

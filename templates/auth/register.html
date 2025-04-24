@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+
+{% block title %}Register - Individual | CodeQuiz Hub{% endblock %}
+
+{% block content %}
+<section class="pt-32 px-4 min-h-screen flex items-center justify-center fade-in">
+  <div class="w-full max-w-md bg-white p-8 rounded-xl shadow-xl space-y-6">
+    <h2 class="text-3xl font-bold text-center text-primary">Register as Individual</h2>
+
+    <form class="space-y-4" action="{{ url_for('auth.register') }}" method="POST" onsubmit="return validatePasswords()">
+      <div>
+        <label for="first_name" class="block text-sm font-medium text-gray-700 mb-1">First Name</label>
+        <input type="text" id="first_name" name="first_name" required placeholder="Your first name"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+
+      <div>
+        <label for="last_name" class="block text-sm font-medium text-gray-700 mb-1">Last Name</label>
+        <input type="text" id="last_name" name="last_name" required placeholder="Your last name"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+
+      <div>
+        <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <input type="email" id="email" name="email" required placeholder="you@example.com"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+
+      <div>
+        <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+        <input type="text" id="username" name="username" required placeholder="Create a username"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+
+      <div>
+        <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+        <input type="password" id="password" name="password" required placeholder="••••••••"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+      </div>
+
+      <div>
+        <label for="confirm_password" class="block text-sm font-medium text-gray-700 mb-1">Confirm Password</label>
+        <input type="password" id="confirm_password" name="confirm_password" required placeholder="Re-enter your password"
+          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
+        <p id="error-message" class="text-sm text-red-600 mt-1"></p>
+      </div>
+
+      <button type="submit"
+        class="w-full bg-primary text-white font-semibold py-2 px-4 rounded-lg hover:bg-secondary transition duration-300">
+        Register
+      </button>
+    </form>
+
+    <p class="text-sm text-center text-gray-600 mt-4">
+      Already have an account?
+      <a href="{{ url_for('auth.login') }}" class="text-primary hover:underline">Login</a>
+    </p>
+  </div>
+</section>
+
+<script>
+  function validatePasswords() {
+    const password = document.getElementById('password').value;
+    const confirmPassword = document.getElementById('confirm_password').value;
+    const errorMessage = document.getElementById('error-message');
+
+    if (password !== confirmPassword) {
+      if (errorMessage) {
+        errorMessage.textContent = "Passwords do not match!";
+      } else {
+        alert("Passwords do not match!");
+      }
+      return false;
+    }
+
+    if (errorMessage) errorMessage.textContent = "";
+    return true;
+  }
+</script>
+{% endblock %}

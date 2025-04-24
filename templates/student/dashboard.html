@@ -1,0 +1,80 @@
+<!-- templates/student/dashboard.html -->
+{% extends "base.html" %}
+
+{% block title %}Student Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Student Dashboard</h1>
+    <p class="lead">Your assigned quizzes and recent activity.</p>
+    {% if current_user.organization %}
+        <p>Organization: <strong>{{ current_user.organization.name }}</strong>
+        {% if not current_user.organization.is_approved %} (Status: Pending Admin Approval) {% endif %}
+        </p>
+    {% endif %}
+    <hr>
+
+    <div class="row">
+        <div class="col-md-6">
+            <h2>Available Quizzes</h2>
+            {% if available_quizzes %}
+                <div class="list-group">
+                    {% for quiz in available_quizzes %}
+                        <a href="#" class="list-group-item list-group-item-action flex-column align-items-start disabled"> {# Link to view_quiz route later #}
+                            <div class="d-flex w-100 justify-content-between">
+                                <h5 class="mb-1">{{ quiz.title }}</h5>
+                                <small>{{ quiz.duration_minutes }} mins</small>
+                            </div>
+                            <p class="mb-1">{{ quiz.description | truncate(100) }}</p>
+                            <small>Status: Ready to take.</small> {# Add logic for start/end times #}
+                            {# Button might go here or on the view_quiz page #}
+                             <button class="btn btn-sm btn-success float-end disabled">Start Quiz (TODO)</button>
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p>No currently available quizzes assigned to you. Check back later!</p>
+            {% endif %}
+             <a href="#" class="btn btn-link mt-2 disabled">View All My Quizzes (TODO)</a>
+        </div>
+
+        <div class="col-md-6">
+            <h2>Recent Attempts</h2>
+            {% if recent_attempts %}
+                <ul class="list-group">
+                    {% for attempt in recent_attempts %}
+                        <li class="list-group-item">
+                           <div>
+                               <strong>{{ attempt.quiz.title }}</strong>
+                                <small class="text-muted"> - Started: {{ attempt.start_time.strftime('%Y-%m-%d %H:%M') }}</small>
+                           </div>
+                           <div>
+                                Status: {{ attempt.status.name }}
+                                {% if attempt.score is not none %} | Score: {{ "%.1f"|format(attempt.score) }} {% endif %}
+                                {% if attempt.status in ['SUBMITTED', 'GRADED', 'TIMED_OUT'] %}
+                                     <a href="#" class="btn btn-sm btn-outline-info float-end disabled">View Results (TODO)</a>
+                                {% endif %}
+                           </div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No recent quiz attempts found.</p>
+            {% endif %}
+             <a href="#" class="btn btn-link mt-2 disabled">View Full History & Analytics (TODO)</a>
+        </div>
+    </div>
+
+    <!-- Gamification Section -->
+     <div class="row mt-4">
+         <div class="col-md-6">
+             <h2>Your Progress</h2>
+             <p>Points: <span class="badge bg-primary">{{ current_user.gamification_points }}</span></p>
+             <p>Level: <span class="badge bg-secondary">{{ current_user.gamification_level }}</span></p>
+             {# Add badge display logic #}
+              <p>Badges: <a href="#" class="disabled">View Badges (TODO)</a></p>
+         </div>
+     </div>
+
+</div>
+{% endblock %}
