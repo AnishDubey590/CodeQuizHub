@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Organization Registration{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-2xl shadow-md">
+    <h2 class="text-2xl font-semibold text-center mb-4">Register Your Organization</h2>
+    <p class="text-gray-600 text-center mb-6">
+        Create an account for your organization and its primary administrator.<br>
+        Your registration will be reviewed by a platform administrator before activation.
+    </p>
+
+    <form method="POST" action="{{ url_for('auth.organization_register') }}" novalidate class="space-y-6">
+        {# CSRF token if using Flask-WTF #}
+        {# {{ form.csrf_token }} #}
+
+        <div>
+            <h3 class="text-lg font-medium mb-2">Organization Details</h3>
+            <div class="border-t border-gray-200 mb-4"></div>
+
+            <label for="org_name" class="block text-sm font-medium text-gray-700">Organization Name <span class="text-red-500">*</span></label>
+            <input type="text" id="org_name" name="org_name" required
+                   placeholder="e.g., Example University, Tech Corp Inc."
+                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+
+            <label for="org_description" class="block mt-4 text-sm font-medium text-gray-700">Organization Description</label>
+            <textarea id="org_description" name="org_description" rows="3"
+                      placeholder="Briefly describe your organization (optional)"
+                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></textarea>
+        </div>
+
+        <div>
+            <h3 class="text-lg font-medium mt-8 mb-2">Administrator Account Details</h3>
+            <div class="border-t border-gray-200 mb-2"></div>
+            <p class="text-sm text-gray-500 mb-4">This user will manage your organization's account, create quizzes, and add students.</p>
+
+            <label for="admin_username" class="block text-sm font-medium text-gray-700">Administrator Username <span class="text-red-500">*</span></label>
+            <input type="text" id="admin_username" name="admin_username" required
+                   placeholder="Choose a unique username"
+                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+
+            <label for="admin_email" class="block mt-4 text-sm font-medium text-gray-700">Administrator Email <span class="text-red-500">*</span></label>
+            <input type="email" id="admin_email" name="admin_email" required
+                   placeholder="admin@yourorganization.com"
+                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+
+            <label for="admin_password" class="block mt-4 text-sm font-medium text-gray-700">Administrator Password <span class="text-red-500">*</span></label>
+            <input type="password" id="admin_password" name="admin_password" required
+                   placeholder="Choose a strong password"
+                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+
+            <label for="admin_confirm_password" class="block mt-4 text-sm font-medium text-gray-700">Confirm Administrator Password <span class="text-red-500">*</span></label>
+            <input type="password" id="admin_confirm_password" name="admin_confirm_password" required
+                   placeholder="Re-enter the password"
+                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+        </div>
+
+        <div class="pt-4">
+            <button type="submit"
+                    class="w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition">
+                Request Registration
+            </button>
+        </div>
+    </form>
+
+    <p class="text-center text-sm text-gray-600 mt-6">
+        Already have an account?
+        <a href="{{ url_for('auth.login') }}" class="text-blue-600 hover:underline">Login here</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    (function () {
+        'use strict'
+        var forms = document.querySelectorAll('form[novalidate]')
+        Array.prototype.slice.call(forms)
+            .forEach(function (form) {
+                form.addEventListener('submit', function (event) {
+                    if (!form.checkValidity()) {
+                        event.preventDefault()
+                        event.stopPropagation()
+                    }
+                    const password = form.querySelector('#admin_password');
+                    const confirmPassword = form.querySelector('#admin_confirm_password');
+                    if (password && confirmPassword && password.value !== confirmPassword.value) {
+                        confirmPassword.setCustomValidity("Passwords do not match.");
+                        event.preventDefault();
+                        event.stopPropagation();
+                    } else if (confirmPassword) {
+                        confirmPassword.setCustomValidity("");
+                    }
+                    form.classList.add('was-validated')
+                }, false)
+            })
+    })()
+</script>
+{% endblock %}

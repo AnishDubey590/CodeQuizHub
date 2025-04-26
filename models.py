@@ -1,541 +1,693 @@
-# models.py - Complete database models for CodeQuizHub with improvements and comments
+# models.py - Comprehensive Database Model for CodeQuizHub v3
 # ===============================================================================
-# This file defines the SQLAlchemy database models for the CodeQuizHub application.
-# It includes user roles, organizations, quizzes, questions, answers, gamification
-# elements, security logging, and relationships between these entities.
+# This version separates Credentials (Auth) from User (Profile), includes an
+# explicit Teacher role within Organizations, and aims for a logical structure
+# reflecting a college/teacher/student scenario alongside individual users.
+# Focuses on data integrity, clear relationships, and supporting core features.
 # ===============================================================================
 
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from flask_login import UserMixin
-from datetime import datetime
+from flask_login import UserMixin # UserMixin belongs on Credentials for Flask-Login integration
+from datetime import datetime, timezone, timedelta # Use timezone-aware datetimes and timedelta
 import enum
-import json # For storing list of presented question IDs or other JSON data
+import json
+from typing import List, Optional, Dict, Any # For type hinting helper methods
 
-# Assume 'db' is initialized in your Flask app
-# Example:
-# from flask_sqlalchemy import SQLAlchemy
-# db = SQLAlchemy()
-# OR if using Flask application factory pattern:
-# from . import db
-from . import db # Make sure db is imported correctly based on your project structure
+# Assume 'db' is initialized in your Flask app's __init__.py or extensions.py
+from . import db # Or your actual import path for the db object
+
 
 # --- Enums ---
-# Using Enums improves data integrity and readability for fixed sets of values.
+# Controlled vocabularies for specific fields, improving data integrity.
 
 class UserRole(enum.Enum):
-    """ Defines the possible roles a user can have within the platform. """
-    ADMIN = 'Admin'                 # Super user with full control
-    ORGANIZATION = 'Organization'   # User representing/managing an organization
-    STUDENT = 'Student'             # User belonging to an organization, taking assigned quizzes
-    USER = 'User'                   # Individual user, not tied to an organization (can use public/friend features)
+    """ Defines the roles a user can have within the system. """
+    ADMIN = 'Admin'             # Superuser, full system access
+    ORGANIZATION = 'Organization' # Primary admin/manager for an organization's account
+    TEACHER = 'Teacher'         # Creates/manages quizzes/students *within* an organization
+    STUDENT = 'Student'         # Takes quizzes, belongs to an organization
+    USER = 'User'               # General individual user, operates outside organizations
 
 class QuestionType(enum.Enum):
-    """ Defines the types of questions supported in quizzes. """
-    MCQ = 'Multiple Choice'
-    FILL_IN_BLANKS = 'Fill in the Blanks'
-    SHORT_ANSWER = 'Short Answer'
-    CODING = 'Coding'
+    """ Defines the types of questions available. """
+    MCQ = 'Multiple Choice'             # Standard multiple choice
+    FILL_IN_BLANKS = 'Fill in the Blanks' # Answer is one or more specific strings
+    SHORT_ANSWER = 'Short Answer'         # Free text answer, often requires manual grading
+    CODING = 'Coding'                     # Requires code submission and execution against test cases
 
 class QuestionSelectionStrategy(enum.Enum):
-    """ Defines how questions are selected for a specific quiz instance. """
-    FIXED = 'Fixed Set'             # All users taking the quiz get the exact same set of questions
-    RANDOM = 'Random Pooling'       # Questions are randomly selected from a larger pool based on tags/difficulty
+    """ Defines how questions are selected for a quiz attempt. """
+    FIXED = 'Fixed Set'          # All predefined questions are used in order
+    RANDOM = 'Random Pooling'    # A specified number of questions are randomly chosen from the pool
 
 class OrgApprovalStatus(enum.Enum):
-    """ Defines the status of an organization's registration request. """
-    PENDING = 'pending'             # Organization registration is awaiting admin approval
-    APPROVED = 'approved'           # Organization registration has been approved by an admin
-    REJECTED = 'rejected'           # Organization registration has been rejected by an admin
+    """ Defines the approval state of an organization's registration request. """
+    PENDING = 'pending'          # Awaiting administrator review
+    APPROVED = 'approved'        # Registration accepted
+    REJECTED = 'rejected'        # Registration denied
+
+class InvitationStatus(enum.Enum):
+    """ Status for user invitations to join an organization. """
+    PENDING = 'pending'     # Invitation sent, awaiting user action
+    ACCEPTED = 'accepted'   # User accepted the invitation
+    DECLINED = 'declined'   # User declined the invitation
+    EXPIRED = 'expired'     # Invitation link expired
 
 class QuizStatus(enum.Enum):
     """ Defines the lifecycle status of a quiz. """
-    DRAFT = 'Draft'                 # Quiz is being created/edited, not yet available
-    PUBLISHED = 'Published'         # Quiz is ready to be taken or assigned
-    ACTIVE = 'Active'               # Quiz is currently running (optional, can be derived from start/end times)
-    ARCHIVED = 'Archived'           # Quiz is no longer active but kept for historical records
+    DRAFT = 'Draft'         # In creation/editing, not visible/usable yet
+    PUBLISHED = 'Published' # Ready, potentially assignable or active
+    ARCHIVED = 'Archived'   # No longer active, kept for historical records/analysis
 
 class QuizAttemptStatus(enum.Enum):
-    """ Defines the status of a user's attempt at taking a quiz. """
-    STARTED = 'Started'             # User has begun the quiz attempt
-    SUBMITTED = 'Submitted'         # User has finished and submitted the quiz
-    GRADED = 'Graded'               # The submitted attempt has been fully graded (auto or manual)
-    TIMED_OUT = 'Timed Out'         # The quiz attempt was automatically submitted due to the time limit expiring
+    """ Defines the status of a user's progress through a quiz attempt. """
+    STARTED = 'Started'     # User has begun the attempt
+    IN_PROGRESS = 'In Progress' # User is actively working (optional, can infer)
+    SUBMITTED = 'Submitted' # User finalized their answers manually
+    GRADED = 'Graded'       # Scoring is complete (automatic or manual)
+    TIMED_OUT = 'Timed Out' # Attempt automatically ended due to time limit
 
 class GradingStatus(enum.Enum):
-    """ Defines the grading status for an individual answer within a quiz attempt. """
-    PENDING = 'Pending'             # Answer has not yet been graded (relevant for manual/AI grading)
-    GRADED = 'Graded'               # Answer has been graded
-    ERROR = 'Error'                 # An error occurred during automatic grading
+    """ Defines the grading status of an individual StudentAnswer. """
+    PENDING = 'Pending'     # Awaiting grading (relevant for non-auto-graded types)
+    GRADED = 'Graded'       # Grading complete
+    ERROR = 'Error'         # An error occurred during automatic grading
+
 
 # --- Association Tables ---
-# These tables manage many-to-many relationships between main models.
+# Manage many-to-many relationships. Using indexes and sensible ON DELETE clauses.
 
-# Links Quizzes to the Questions they contain (for FIXED strategy or the pool for RANDOM)
 quiz_questions = db.Table('quiz_questions',
-    db.Column('quiz_id', db.Integer, db.ForeignKey('quizzes.id'), primary_key=True, doc="Foreign key to the Quiz"),
-    db.Column('question_id', db.Integer, db.ForeignKey('questions.id'), primary_key=True, doc="Foreign key to the Question")
+    db.Column('quiz_id', db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), primary_key=True, index=True),
+    db.Column('question_id', db.Integer, db.ForeignKey('questions.id', ondelete='RESTRICT'), primary_key=True, index=True),
+    # RESTRICT on question prevents deleting a question if it's actively used in a quiz.
+    doc="Maps Questions included in a specific Quiz (Many-to-Many)"
 )
 
-# Links Questions to descriptive Tags (e.g., 'DSA', 'Python', 'Easy')
 question_tags = db.Table('question_tags',
-    db.Column('question_id', db.Integer, db.ForeignKey('questions.id'), primary_key=True, doc="Foreign key to the Question"),
-    db.Column('tag_id', db.Integer, db.ForeignKey('tags.id'), primary_key=True, doc="Foreign key to the Tag")
+    db.Column('question_id', db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), primary_key=True, index=True),
+    db.Column('tag_id', db.Integer, db.ForeignKey('tags.id', ondelete='CASCADE'), primary_key=True, index=True),
+    doc="Associates Tags with Questions for categorization (Many-to-Many)"
 )
 
-# Links Quizzes to the Students (Users) who are assigned to take them (primarily for Org quizzes)
+# Links Quizzes specifically assigned to Students (User profiles)
 quiz_assignments = db.Table('quiz_assignments',
-    db.Column('quiz_id', db.Integer, db.ForeignKey('quizzes.id'), primary_key=True, doc="Foreign key to the assigned Quiz"),
-    db.Column('student_id', db.Integer, db.ForeignKey('users.id'), primary_key=True, doc="Foreign key to the assigned Student (User)"),
-    db.Column('assigned_at', db.DateTime, default=datetime.utcnow, doc="Timestamp when the quiz was assigned")
+    db.Column('quiz_id', db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), primary_key=True, index=True),
+    db.Column('student_user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True, doc="FK -> User profile ID of the assigned Student"),
+    db.Column('assigned_at', db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)),
+    db.Column('assigned_by_user_id', db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="FK -> User profile ID of the Teacher/Admin who assigned"),
+    doc="Records specific Quiz assignments to Student User profiles"
 )
 
-# Links Users to the Badges they have earned (Gamification)
+# Links User profiles to earned Badges
 user_badges = db.Table('user_badges',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True, doc="Foreign key to the User who earned the badge"),
-    db.Column('badge_id', db.Integer, db.ForeignKey('badges.id'), primary_key=True, doc="Foreign key to the Badge earned"),
-    db.Column('earned_at', db.DateTime, default=datetime.utcnow, doc="Timestamp when the badge was earned")
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True, doc="FK -> User profile ID"),
+    db.Column('badge_id', db.Integer, db.ForeignKey('badges.id', ondelete='CASCADE'), primary_key=True, index=True),
+    db.Column('earned_at', db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)),
+    doc="Records Badges earned by User profiles (Many-to-Many)"
 )
 
-# Links Users to other Users representing friendships (Self-referential Many-to-Many)
+# Links User profiles for Friendships (for Individual Users)
 friendships = db.Table('friendships',
-    db.Column('user_id', db.Integer, db.ForeignKey('users.id'), primary_key=True, doc="Foreign key to the User initiating the friendship"),
-    db.Column('friend_id', db.Integer, db.ForeignKey('users.id'), primary_key=True, doc="Foreign key to the User being added as a friend"),
-    db.Column('established_at', db.DateTime, default=datetime.utcnow, doc="Timestamp when the friendship was established"),
-    # Optional: Add a 'status' column here (e.g., 'pending', 'accepted') if friend requests need approval
-    # db.Column('status', db.String(20), default='accepted', nullable=False)
+    db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True, doc="FK -> Initiating User profile ID"),
+    db.Column('friend_user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True, doc="FK -> Friend's User profile ID"),
+    db.Column('established_at', db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)),
+    # Consider 'status' (pending, accepted) if friend requests needed
+    doc="Represents friendships between Individual User profiles (Many-to-Many)"
 )
 
 
 # --- Main Models ---
 
-class User(db.Model, UserMixin):
-    """ Represents a user in the system. Can be an Admin, Org rep, Student, or Individual User. """
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the user")
-    username = db.Column(db.String(80), unique=True, nullable=False, doc="Unique username for login")
-    email = db.Column(db.String(120), unique=True, nullable=False, doc="Unique email address for communication and potentially login/recovery")
-    password_hash = db.Column(db.String(256), nullable=False, doc="Hashed password for secure storage")
-    role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.USER, doc="Role defining user's permissions and capabilities (default is Individual User)")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp of user account creation")
-    is_active = db.Column(db.Boolean, default=True, doc="Flag indicating if the user account is active (can be used for disabling accounts)")
-    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True, doc="Foreign key linking student/org roles to their organization (null for Admin/Individual Users)")
-    student_code = db.Column(db.String(50), nullable=True, doc="Optional unique identifier for a student within an organization (e.g., roll number)")
-    enrollment_date = db.Column(db.DateTime, nullable=True, doc="Date when a student was enrolled in an organization")
+class Credentials(db.Model, UserMixin):
+    """ Stores authentication data (login, password, role). Integrates with Flask-Login. """
+    __tablename__ = 'credentials'
 
-    # Gamification fields
-    gamification_points = db.Column(db.Integer, default=0, doc="Points accumulated by the user through activities (taking quizzes, achievements)")
-    gamification_level = db.Column(db.Integer, default=1, doc="Level achieved by the user based on points")
+    id = db.Column(db.Integer, primary_key=True, doc="Unique ID for Flask-Login")
+    username = db.Column(db.String(80), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.USER, index=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True, doc="Allows disabling login without deleting user")
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    last_login_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    # Relationships
-    # If the user is part of an organization (Student or Org role managing it)
-    organization = db.relationship('Organization', back_populates='members', foreign_keys=[organization_id], doc="Link to the Organization this user belongs to")
-    # Quiz attempts made by this user
-    quiz_attempts = db.relationship('QuizAttempt', back_populates='user', lazy='dynamic', doc="Attempts made by this user on various quizzes")
-    # Quizzes specifically assigned to this user (Student role)
-    assigned_quizzes = db.relationship('Quiz', secondary=quiz_assignments, back_populates='assigned_students', lazy='dynamic', doc="Quizzes assigned directly to this student")
-    # If this user is an Organization role, this links to the Org they manage
-    managed_organization = db.relationship('Organization', back_populates='admin_user', foreign_keys='Organization.admin_user_id', uselist=False, doc="The Organization managed by this user (if role is Organization)")
-    # Badges earned by this user
-    badges = db.relationship('Badge', secondary=user_badges, back_populates='users', lazy='dynamic', doc="Badges awarded to this user")
-    # Notifications intended for this user
-    notifications = db.relationship('Notification', back_populates='user', lazy='dynamic', cascade="all, delete-orphan", doc="Notifications sent to this user")
-    # Friendships established by this user (symmetric relationship managed via friendships table)
-    # 'friends' gives users who have added this user as a friend.
-    # 'added_friends' gives users this user has added as friends.
-    # Use `user.friends` to get friends who added this user, and `user.friend_of` to get users this user added.
-    # Application logic might be needed to present a unified "friends list".
-    friends = db.relationship(
-        'User', secondary=friendships,
-        primaryjoin=(friendships.c.friend_id == id),
-        secondaryjoin=(friendships.c.user_id == id),
-        backref=db.backref('friend_of', lazy='dynamic'), # Allows access via user.friend_of
-        lazy='dynamic',
-        doc="Relationship defining friends (users who added this user)"
-    )
-    # Quizzes created by this user (if they are an Individual User creating public/friend quizzes)
-    created_quizzes = db.relationship('Quiz', back_populates='creator', foreign_keys='Quiz.creator_user_id', lazy='dynamic')
-    # Audit logs generated by this user (if they are an Admin)
-    audit_logs_created = db.relationship('AuditLog', back_populates='admin_user', foreign_keys='AuditLog.admin_user_id', lazy='dynamic')
+    # One-to-one link to the detailed user profile
+    # cascade: Deleting credentials removes the associated user profile.
+    user_profile = db.relationship('User', back_populates='credentials', uselist=False, cascade="all, delete-orphan", passive_deletes=True)
 
-
-    def set_password(self, password):
-        """ Hashes the provided password and stores it. """
+    def set_password(self, password: str) -> None:
         self.password_hash = generate_password_hash(password)
 
-    def check_password(self, password):
-        """ Checks if the provided password matches the stored hash. """
+    def check_password(self, password: str) -> bool:
         return check_password_hash(self.password_hash, password)
 
-    def __repr__(self):
-        """ String representation for User object, useful for debugging. """
-        org_info = f", OrgID: {self.organization_id}" if self.organization_id else ""
-        return f'<User {self.id}: {self.username} ({self.role.name}){org_info}>'
+    def get_id(self) -> str: # Required by Flask-Login
+        return str(self.id)
+
+    def __repr__(self) -> str:
+        status = "Active" if self.is_active else "Inactive"
+        role_name = self.role.name if self.role else "No Role"
+        return f'<Credentials {self.id}: {self.username} ({role_name}) - {status}>'
+
+
+class User(db.Model):
+    """ Stores user profile data (non-authentication details). Linked one-to-one with Credentials. """
+    __tablename__ = 'users'
+
+    id = db.Column(db.Integer, primary_key=True, doc="Unique ID for the User Profile")
+    # Foreign key linking back to the Credentials table
+    credentials_id = db.Column(db.Integer, db.ForeignKey('credentials.id', ondelete='CASCADE'), unique=True, nullable=False, index=True)
+
+    # --- Profile Fields ---
+    email = db.Column(db.String(120), unique=True, nullable=False, index=True)
+    display_name = db.Column(db.String(100), nullable=True)
+    profile_picture_url = db.Column(db.String(512), nullable=True)
+    bio = db.Column(db.Text, nullable=True)
+
+    # --- Organization Membership ---
+    # Nullable because Admins and Individual Users ('USER' role) don't belong to one.
+    # ondelete='SET NULL': If an org is deleted, members become unaffiliated rather than deleted.
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='SET NULL'), nullable=True, index=True)
+    # Specific fields for students/staff within an organization
+    student_code = db.Column(db.String(50), nullable=True, index=True, doc="e.g., Roll Number, Employee ID")
+    enrollment_date = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # --- Gamification ---
+    gamification_points = db.Column(db.Integer, default=0, nullable=False)
+    gamification_level = db.Column(db.Integer, default=1, nullable=False)
+
+    # --- Timestamps ---
+    profile_created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    profile_updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # --- Relationships ---
+
+    # Link back to credentials (One-to-One)
+    credentials = db.relationship('Credentials', back_populates='user_profile', uselist=False)
+
+    # Organization this user profile belongs to (if Student/Teacher/Org Admin)
+    organization = db.relationship('Organization', back_populates='members', foreign_keys=[organization_id])
+
+    # Attempts made by this user profile (Student, User)
+    quiz_attempts = db.relationship('QuizAttempt', back_populates='user', lazy='dynamic', foreign_keys='QuizAttempt.user_id', cascade="all, delete-orphan", passive_deletes=True)
+
+    # Quizzes assigned to this user profile (Student)
+    assigned_quizzes = db.relationship('Quiz', secondary=quiz_assignments, primaryjoin=(id == quiz_assignments.c.student_user_id), back_populates='assigned_students', lazy='dynamic')
+
+    # Organization managed *by* this user profile (if Credentials.role == ORGANIZATION)
+    managed_organization = db.relationship('Organization', back_populates='admin_user', foreign_keys='Organization.admin_user_id', uselist=False)
+
+    # Badges earned by this user profile
+    badges = db.relationship('Badge', secondary=user_badges, back_populates='users', lazy='dynamic')
+
+    # Notifications received by this user profile
+    notifications = db.relationship('Notification', back_populates='user', lazy='dynamic', foreign_keys='Notification.user_id', cascade="all, delete-orphan", passive_deletes=True)
+
+    # Friendships (Individual Users) - symmetric view
+    friends = db.relationship('User', secondary=friendships, primaryjoin=(id == friendships.c.user_id), secondaryjoin=(id == friendships.c.friend_user_id), lazy='dynamic') # Simplified symmetric view
+
+    # Quizzes created *by* this user profile (Teacher, Admin, User)
+    created_quizzes = db.relationship('Quiz', back_populates='creator', foreign_keys='Quiz.creator_user_id', lazy='dynamic')
+
+    # Questions created *by* this user profile (Teacher, Admin, User)
+    created_questions = db.relationship('Question', back_populates='creator', foreign_keys='Question.creator_user_id', lazy='dynamic')
+
+    # Answers graded *by* this user profile (Teacher, Admin)
+    graded_answers = db.relationship('StudentAnswer', back_populates='grader', foreign_keys='StudentAnswer.graded_by_user_id', lazy='dynamic')
+
+    # Audit logs initiated *by* this user profile (Admin)
+    audit_logs_created = db.relationship('AuditLog', back_populates='admin_user', foreign_keys='AuditLog.admin_user_id', lazy='dynamic')
+
+    # Certificates awarded *to* this user profile
+    certificates = db.relationship('Certificate', back_populates='user', lazy='dynamic', foreign_keys='Certificate.user_id')
+
+    # Cheating logs related to this user profile (useful for direct lookup)
+    cheating_logs = db.relationship('CheatingLog', back_populates='user', lazy='dynamic', foreign_keys='CheatingLog.user_id')
+
+    # Invitations received or sent by this user (if implementing invitations)
+    invitations_received = db.relationship('OrganizationInvitation', back_populates='invitee', foreign_keys='OrganizationInvitation.invitee_email', primaryjoin='User.email == OrganizationInvitation.invitee_email', lazy='dynamic') # Join on email before user exists
+    invitations_sent = db.relationship('OrganizationInvitation', back_populates='inviter', foreign_keys='OrganizationInvitation.inviter_user_id', lazy='dynamic')
+
+    # Assignments assigned by this user profile (if Teacher/Admin)
+    assignments_created = db.relationship('QuizAssignment', back_populates='assigner', foreign_keys='QuizAssignment.assigned_by_user_id', lazy='dynamic')
+
+
+    def __repr__(self) -> str:
+        username = self.credentials.username if self.credentials else "N/A"
+        role = self.credentials.role.name if self.credentials and self.credentials.role else "N/A"
+        org_info = f" (OrgID: {self.organization_id})" if self.organization_id else ""
+        return f'<User {self.id}: {self.email} (Login: {username}, Role: {role}){org_info}>'
 
 
 class Organization(db.Model):
-    """ Represents an educational institution or company using the platform. """
+    """ Represents an entity like a college, university, or company using the platform. """
     __tablename__ = 'organizations'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the organization")
-    name = db.Column(db.String(100), unique=True, nullable=False, doc="Name of the organization")
-    description = db.Column(db.Text, nullable=True, doc="Optional description of the organization")
-    approval_status = db.Column(db.Enum(OrgApprovalStatus), default=OrgApprovalStatus.PENDING, nullable=False, doc="Status of the organization's registration request")
-    requested_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the organization registration was requested")
-    approved_at = db.Column(db.DateTime, nullable=True, doc="Timestamp when the registration was approved by an admin")
-    approved_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, doc="Foreign key to the Admin User who approved the registration")
-    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), unique=True, nullable=True, doc="Foreign key to the User (role=Organization) who manages this organization account")
 
-    # Relationships
-    # The User who manages this organization's account on the platform
-    admin_user = db.relationship('User', back_populates='managed_organization', foreign_keys=[admin_user_id], doc="The primary user managing this organization")
-    # Members (Students and potentially other Org users) belonging to this organization
-    members = db.relationship('User', back_populates='organization', foreign_keys=[User.organization_id], lazy='dynamic', doc="Users (typically Students) belonging to this organization")
-    # Quizzes created by this organization
-    created_quizzes = db.relationship('Quiz', back_populates='organization', lazy='dynamic', foreign_keys='Quiz.organization_id', doc="Quizzes created and owned by this organization")
-    # Questions created and owned by this organization
-    questions = db.relationship('Question', back_populates='organization', lazy='dynamic', doc="Question bank owned by this organization")
-    # Admin user who approved this org (can be null if system generated or pre-approved)
-    approving_admin = db.relationship('User', foreign_keys=[approved_by_admin_id], doc="The Admin user who approved this organization")
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    website_url = db.Column(db.String(512), nullable=True)
+    logo_url = db.Column(db.String(512), nullable=True)
 
-    def __repr__(self):
-        """ String representation for Organization object. """
-        return f'<Organization {self.id}: {self.name} ({self.approval_status.name})>'
+    # Approval Workflow
+    approval_status = db.Column(db.Enum(OrgApprovalStatus), default=OrgApprovalStatus.PENDING, nullable=False, index=True)
+    requested_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    approved_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    # FKs point to User *profile* IDs (users.id)
+    approved_by_admin_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="Admin User Profile who approved")
+    # This user MUST have Credentials.role == ORGANIZATION
+    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), unique=True, nullable=True, index=True, doc="Primary admin User Profile for this org")
+
+    # Timestamps
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # --- Relationships ---
+    # User profile managing this organization (Role: ORGANIZATION)
+    admin_user = db.relationship('User', back_populates='managed_organization', foreign_keys=[admin_user_id])
+
+    # User profiles belonging to this organization (Roles: TEACHER, STUDENT)
+    members = db.relationship('User', back_populates='organization', foreign_keys=[User.organization_id], lazy='dynamic', order_by='User.display_name')
+
+    # Quizzes owned/created *by* the organization itself (distinct from teacher-created)
+    created_quizzes = db.relationship('Quiz', back_populates='organization', lazy='dynamic', foreign_keys='Quiz.organization_id', cascade="all, delete-orphan", passive_deletes=True)
+
+    # Questions owned *by* the organization
+    questions = db.relationship('Question', back_populates='organization', lazy='dynamic', foreign_keys='Question.organization_id', cascade="all, delete-orphan", passive_deletes=True)
+
+    # The admin User profile who approved this org
+    approving_admin = db.relationship('User', foreign_keys=[approved_by_admin_id])
+
+    # Invitations sent *by* this organization (potentially by admin or teachers)
+    invitations = db.relationship('OrganizationInvitation', back_populates='organization', foreign_keys='OrganizationInvitation.organization_id', lazy='dynamic', cascade="all, delete-orphan", passive_deletes=True)
+
+
+    def __repr__(self) -> str:
+        admin_username = "None"
+        if self.admin_user and self.admin_user.credentials:
+            admin_username = self.admin_user.credentials.username
+        status = self.approval_status.name if self.approval_status else "N/A"
+        return f'<Organization {self.id}: {self.name} ({status}), Admin: {admin_username}>'
 
 
 class Tag(db.Model):
-    """ Represents a tag that can be applied to questions for categorization (e.g., topic, difficulty). """
+    """ Category tags for Questions. """
     __tablename__ = 'tags'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the tag")
-    name = db.Column(db.String(50), unique=True, nullable=False, doc="The name of the tag (e.g., 'Data Structures', 'Beginner', 'Python')")
-    # Relationship back to questions associated with this tag
-    questions = db.relationship('Question', secondary=question_tags, back_populates='tags', lazy='dynamic', doc="Questions associated with this tag")
-
-    def __repr__(self):
-        """ String representation for Tag object. """
-        return f'<Tag {self.id}: {self.name}>'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    # Many-to-many relationship with Question
+    questions = db.relationship('Question', secondary=question_tags, back_populates='tags', lazy='dynamic')
+    def __repr__(self) -> str: return f'<Tag {self.id}: {self.name}>'
 
 
 class Question(db.Model):
-    """ Represents a single question within the system, of various types. """
+    """ A single question (MCQ, Coding, etc.). Can be owned by Org or User. """
     __tablename__ = 'questions'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the question")
-    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True, doc="Foreign key to the Organization that owns this question (null if public/admin created)")
-    creator_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, doc="Foreign key to the User who created this question (if not owned by an org)") # TODO: Consider adding this if needed
-    question_type = db.Column(db.Enum(QuestionType), nullable=False, doc="The type of the question (e.g., MCQ, Coding)")
-    question_text = db.Column(db.Text, nullable=False, doc="The main text or prompt of the question")
-    difficulty = db.Column(db.String(20), nullable=True, doc="Optional difficulty level (e.g., 'Easy', 'Medium', 'Hard')")
-    points = db.Column(db.Integer, default=1, nullable=False, doc="Default points awarded for answering this question correctly")
-    correct_answer_text = db.Column(db.Text, nullable=True, doc="Correct answer text (for Fill-in-blanks, Short Answer)")
-    explanation = db.Column(db.Text, nullable=True, doc="Optional explanation shown to users after attempting the question")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the question was created")
-    is_ai_generated = db.Column(db.Boolean, default=False, doc="Flag indicating if this question was generated by AI")
-    ai_prompt = db.Column(db.Text, nullable=True, doc="The prompt used to generate this question via AI (if applicable)")
+    id = db.Column(db.Integer, primary_key=True)
 
-    # Relationships
-    # Organization that owns this question
-    organization = db.relationship('Organization', back_populates='questions', doc="The organization owning this question")
-    # Options for MCQ questions (one-to-many)
-    options = db.relationship('QuestionOption', back_populates='question', cascade='all, delete-orphan', lazy='dynamic', doc="Options associated with this question (if MCQ)")
-    # Code templates for coding questions (one-to-many)
-    code_templates = db.relationship('CodeTemplate', back_populates='question', cascade='all, delete-orphan', lazy='dynamic', doc="Starter code templates for different languages (if Coding)")
-    # Test cases for coding questions (one-to-many)
-    test_cases = db.relationship('TestCase', back_populates='question', cascade='all, delete-orphan', lazy='dynamic', doc="Test cases used to evaluate coding question submissions")
-    # Tags associated with this question (many-to-many)
-    tags = db.relationship('Tag', secondary=question_tags, back_populates='questions', lazy='dynamic', doc="Tags categorizing this question")
-    # Quizzes that include this question (many-to-many)
-    quizzes = db.relationship('Quiz', secondary=quiz_questions, back_populates='questions', lazy='dynamic', doc="Quizzes that contain this question")
-    # Answers submitted by students for this question across all attempts
-    student_answers = db.relationship('StudentAnswer', back_populates='question', lazy='dynamic', doc="All student answers submitted for this question")
+    # --- Ownership & Visibility ---
+    # If org-owned, org ID is set. If user-created, creator ID is set.
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=True, index=True, doc="FK -> Owning Organization (if org-owned)")
+    creator_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="FK -> User Profile ID of creator (Teacher, Admin, User)")
+    is_public = db.Column(db.Boolean, default=False, nullable=False, index=True, doc="Is visible/usable outside the owner's context?")
 
-    def __repr__(self):
-        """ String representation for Question object. """
-        org_info = f"Org: {self.organization_id}" if self.organization_id else "Public"
-        return f'<Question {self.id} ({self.question_type.name}) Points: {self.points} ({org_info})>'
+    # --- Content & Type ---
+    question_type = db.Column(db.Enum(QuestionType), nullable=False, index=True)
+    question_text = db.Column(db.Text, nullable=False)
+    difficulty = db.Column(db.String(20), nullable=True, index=True) # Consider Enum
+    points = db.Column(db.Float, default=1.0, nullable=False) # Use Float for potential partial points
+    correct_answer_text = db.Column(db.Text, nullable=True) # For Fill-in-blanks, Short Answer
+    explanation = db.Column(db.Text, nullable=True)
+
+    # --- Metadata ---
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    is_ai_generated = db.Column(db.Boolean, default=False, nullable=False)
+    ai_prompt = db.Column(db.Text, nullable=True)
+
+    # --- Relationships ---
+    organization = db.relationship('Organization', back_populates='questions', foreign_keys=[organization_id])
+    creator = db.relationship('User', back_populates='created_questions', foreign_keys=[creator_user_id]) # Links to User profile
+
+    options = db.relationship('QuestionOption', back_populates='question', cascade='all, delete-orphan', passive_deletes=True, lazy='dynamic', order_by='QuestionOption.display_order')
+    code_templates = db.relationship('CodeTemplate', back_populates='question', cascade='all, delete-orphan', passive_deletes=True, lazy='dynamic')
+    test_cases = db.relationship('TestCase', back_populates='question', cascade='all, delete-orphan', passive_deletes=True, lazy='dynamic')
+    tags = db.relationship('Tag', secondary=question_tags, back_populates='questions', lazy='dynamic')
+    # Quizzes that *include* this question
+    quizzes = db.relationship('Quiz', secondary=quiz_questions, back_populates='questions', lazy='dynamic')
+    # All answers submitted for this question across all attempts
+    student_answers = db.relationship('StudentAnswer', back_populates='question', lazy='dynamic', foreign_keys='StudentAnswer.question_id')
+
+    def __repr__(self) -> str:
+        owner_info = "Public/Admin"
+        if self.organization_id: owner_info = f"OrgID: {self.organization_id}"
+        elif self.creator_user_id: owner_info = f"UserID: {self.creator_user_id}"
+        q_type = self.question_type.name if self.question_type else "N/A"
+        return f'<Question {self.id} ({q_type}) Owner:({owner_info})>'
 
 
 class QuestionOption(db.Model):
-    """ Represents a single option for a Multiple Choice Question (MCQ). """
+    """ An option for an MCQ Question. """
     __tablename__ = 'question_options'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the option")
-    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, doc="Foreign key to the Question this option belongs to")
-    option_text = db.Column(db.Text, nullable=False, doc="The text content of the option")
-    is_correct = db.Column(db.Boolean, default=False, nullable=False, doc="Flag indicating if this is the correct option for the MCQ")
-    # Relationship back to the parent question
-    question = db.relationship('Question', back_populates='options', doc="The Question this option belongs to")
-
-    def __repr__(self):
-        """ String representation for QuestionOption object. """
-        return f'<Option {self.id} for Q{self.question_id} Correct:{self.is_correct}>'
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), nullable=False, index=True)
+    option_text = db.Column(db.Text, nullable=False)
+    is_correct = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    display_order = db.Column(db.Integer, default=0, nullable=False)
+    feedback = db.Column(db.Text, nullable=True, doc="Specific feedback if this option is chosen") # Option-specific feedback
+    question = db.relationship('Question', back_populates='options')
+    def __repr__(self) -> str: return f'<Option {self.id} for Q{self.question_id} Correct:{self.is_correct}>'
 
 
 class CodeTemplate(db.Model):
-    """ Represents starter code template for a specific language for a Coding Question. """
+    """ Starter code for a Coding Question. """
     __tablename__ = 'code_templates'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the code template")
-    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, doc="Foreign key to the Coding Question this template is for")
-    language = db.Column(db.String(50), nullable=False, doc="The programming language of the template (e.g., 'Python', 'Java', 'C++')")
-    template_code = db.Column(db.Text, nullable=True, doc="The starter code provided to the user")
-    # Relationship back to the parent question
-    question = db.relationship('Question', back_populates='code_templates', doc="The Question this template belongs to")
-
-    def __repr__(self):
-        """ String representation for CodeTemplate object. """
-        return f'<CodeTemplate {self.id}: {self.language} for Q{self.question_id}>'
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), nullable=False, index=True)
+    language = db.Column(db.String(50), nullable=False, index=True) # e.g., python, java
+    template_code = db.Column(db.Text, nullable=True)
+    question = db.relationship('Question', back_populates='code_templates')
+    def __repr__(self) -> str: return f'<CodeTemplate {self.id}: {self.language} for Q{self.question_id}>'
 
 
 class TestCase(db.Model):
-    """ Represents a test case used to evaluate a submission for a Coding Question. """
+    """ Test case for a Coding Question. """
     __tablename__ = 'test_cases'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the test case")
-    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, doc="Foreign key to the Coding Question this test case belongs to")
-    input_data = db.Column(db.Text, nullable=True, doc="Input data to be fed to the user's code (stdin)")
-    expected_output = db.Column(db.Text, nullable=False, doc="The expected output (stdout) for the given input")
-    is_hidden = db.Column(db.Boolean, default=False, nullable=False, doc="Flag indicating if the input/output is hidden from the user during testing (used for final grading)")
-    points = db.Column(db.Integer, default=1, doc="Points awarded if the user's code passes this test case")
-    # Relationship back to the parent question
-    question = db.relationship('Question', back_populates='test_cases', doc="The Question this test case belongs to")
-
-    def __repr__(self):
-        """ String representation for TestCase object. """
-        visibility = "Hidden" if self.is_hidden else "Visible"
-        return f'<TestCase {self.id} for Q{self.question_id} ({visibility} - {self.points}pts)>'
+    id = db.Column(db.Integer, primary_key=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), nullable=False, index=True)
+    input_data = db.Column(db.Text, nullable=True)
+    expected_output = db.Column(db.Text, nullable=False)
+    is_hidden = db.Column(db.Boolean, default=False, nullable=False)
+    points = db.Column(db.Float, default=1.0, nullable=False) # Allow float for partial points per test case
+    description = db.Column(db.Text, nullable=True)
+    time_limit_ms = db.Column(db.Integer, nullable=True, doc="Optional time limit in milliseconds for this test case")
+    memory_limit_kb = db.Column(db.Integer, nullable=True, doc="Optional memory limit in kilobytes for this test case")
+    question = db.relationship('Question', back_populates='test_cases')
+    def __repr__(self) -> str: visibility = "Hidden" if self.is_hidden else "Visible"; return f'<TestCase {self.id} for Q{self.question_id} ({visibility} - {self.points}pts)>'
 
 
 class Quiz(db.Model):
-    """ Represents a quiz or coding competition event. """
+    """ A collection of questions presented as a test or assessment. """
     __tablename__ = 'quizzes'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the quiz")
-    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id'), nullable=True, doc="Foreign key to the Organization that created/owns this quiz (null if public, friend-based, or admin created)")
-    creator_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, doc="Foreign key to the Individual User who created this quiz (if not org-owned)")
-    title = db.Column(db.String(100), nullable=False, doc="The title of the quiz")
-    description = db.Column(db.Text, nullable=True, doc="Optional description or instructions for the quiz")
-    start_time = db.Column(db.DateTime, nullable=True, doc="Optional start time when the quiz becomes available")
-    end_time = db.Column(db.DateTime, nullable=True, doc="Optional end time after which the quiz cannot be started/submitted")
-    duration_minutes = db.Column(db.Integer, nullable=False, doc="The maximum time allowed in minutes to complete the quiz once started")
-    is_public = db.Column(db.Boolean, default=False, nullable=False, doc="Flag indicating if the quiz is available to all logged-in users (Individual Users)")
-    selection_strategy = db.Column(db.Enum(QuestionSelectionStrategy), nullable=False, default=QuestionSelectionStrategy.FIXED, doc="Method used to select questions for attempts (Fixed set or Random pool)")
-    num_questions_to_pool = db.Column(db.Integer, nullable=True, doc="Number of questions to randomly select if strategy is RANDOM")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the quiz was created")
-    status = db.Column(db.Enum(QuizStatus), default=QuizStatus.DRAFT, nullable=False, doc="Current lifecycle status of the quiz (Draft, Published, Archived)")
-    max_attempts = db.Column(db.Integer, default=1, doc="Maximum number of times a user can attempt this quiz (usually 1 for org/formal quizzes)")
-    proctoring_enabled = db.Column(db.Boolean, default=False, doc="Flag indicating if proctoring features (camera, mic, screen sharing - with consent) are enabled for this quiz")
-    # Note: Actual proctoring data (streams/recordings) would likely be stored externally (e.g., S3), not directly in this DB. This flag indicates if the feature *should* be active.
+    id = db.Column(db.Integer, primary_key=True)
 
-    # Relationships
-    # The organization that created this quiz
-    organization = db.relationship('Organization', back_populates='created_quizzes', foreign_keys=[organization_id], doc="The Organization that created this quiz")
-    # The individual user who created this quiz (if applicable)
-    creator = db.relationship('User', back_populates='created_quizzes', foreign_keys=[creator_user_id], doc="The Individual User who created this quiz")
-    # The questions included in this quiz (either fixed set or the pool for random selection)
-    questions = db.relationship('Question', secondary=quiz_questions, back_populates='quizzes', lazy='dynamic', doc="Questions associated with this quiz")
-    # Students specifically assigned to take this quiz
-    assigned_students = db.relationship('User', secondary=quiz_assignments, back_populates='assigned_quizzes', lazy='dynamic', doc="Students assigned to take this quiz")
-    # All attempts made on this quiz by various users
-    attempts = db.relationship('QuizAttempt', back_populates='quiz', lazy='dynamic', doc="All attempts made on this quiz")
-    # Certificates generated for successful completions of this quiz
-    certificates = db.relationship('Certificate', back_populates='quiz', lazy='dynamic') # Added backref
+    # --- Ownership & Visibility ---
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=True, index=True, doc="FK -> Owning Organization")
+    creator_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="FK -> User Profile ID of creator")
+    is_public = db.Column(db.Boolean, default=False, nullable=False, index=True, doc="Accessible to any logged-in user?")
 
-    def __repr__(self):
-        """ String representation for Quiz object. """
-        creator_info = ""
-        if self.organization:
-            creator_info = f"Org: {self.organization.name}"
-        elif self.creator:
-             creator_info = f"User: {self.creator.username}"
-        else:
-             creator_info = "Public/Admin"
-        return f'<Quiz {self.id}: {self.title} ({self.status.name}) ({creator_info})>'
+    # --- Content & Settings ---
+    title = db.Column(db.String(150), nullable=False, index=True)
+    description = db.Column(db.Text, nullable=True)
+    start_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    end_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    duration_minutes = db.Column(db.Integer, nullable=False) # 0 or negative might mean unlimited
+    status = db.Column(db.Enum(QuizStatus), default=QuizStatus.DRAFT, nullable=False, index=True)
+    max_attempts = db.Column(db.Integer, default=1, nullable=False) # 0 for unlimited
+    selection_strategy = db.Column(db.Enum(QuestionSelectionStrategy), nullable=False, default=QuestionSelectionStrategy.FIXED)
+    num_questions_to_pool = db.Column(db.Integer, nullable=True) # Required if strategy is RANDOM
+    shuffle_questions = db.Column(db.Boolean, default=False, nullable=False)
+    shuffle_options = db.Column(db.Boolean, default=False, nullable=False) # Usually applied per-question during rendering
+    show_results_immediately = db.Column(db.Boolean, default=True, nullable=False)
+    # Added setting to control visibility of correct answers/explanations after attempt
+    results_visibility_config = db.Column(db.JSON, nullable=True, doc="JSON detailing when/what results are visible (e.g., {'show_correct': true, 'show_explanation': true, 'after_submit': true, 'after_end_time': false})")
+    allow_navigation = db.Column(db.Boolean, default=True, nullable=False) # Allow moving between questions?
+
+    # --- Proctoring ---
+    proctoring_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    proctoring_config = db.Column(db.JSON, nullable=True, doc="e.g., {'webcam': true, 'mic': false, 'screen': true, 'tab_switch_limit': 5}")
+
+    # --- Timestamps ---
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
+    published_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # --- Relationships ---
+    organization = db.relationship('Organization', back_populates='created_quizzes', foreign_keys=[organization_id])
+    creator = db.relationship('User', back_populates='created_quizzes', foreign_keys=[creator_user_id]) # Links to User profile
+
+    questions = db.relationship('Question', secondary=quiz_questions, back_populates='quizzes', lazy='dynamic', order_by='Question.id')
+    assigned_students = db.relationship('User', secondary=quiz_assignments, primaryjoin=(id == quiz_assignments.c.quiz_id), back_populates='assigned_quizzes', lazy='dynamic')
+    attempts = db.relationship('QuizAttempt', back_populates='quiz', lazy='dynamic', foreign_keys='QuizAttempt.quiz_id', cascade="all, delete-orphan", passive_deletes=True)
+    certificates = db.relationship('Certificate', back_populates='quiz', lazy='dynamic', foreign_keys='Certificate.quiz_id')
+    assignments = db.relationship('QuizAssignment', back_populates='quiz', lazy='dynamic', foreign_keys='QuizAssignment.quiz_id', cascade="all, delete-orphan", passive_deletes=True) # Relationship to the assignment records
+
+    def __repr__(self) -> str:
+        creator_info = "Unknown"
+        if self.organization: creator_info = f"Org: {self.organization.name}"
+        elif self.creator and self.creator.credentials: creator_info = f"User: {self.creator.credentials.username}"
+        status = self.status.name if self.status else "N/A"
+        return f'<Quiz {self.id}: "{self.title}" ({status}) By:({creator_info})>'
 
 
 class QuizAttempt(db.Model):
-    """ Represents a single attempt by a user to take a specific quiz. """
+    """ A single user's attempt at taking a quiz. """
     __tablename__ = 'quiz_attempts'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for this quiz attempt")
-    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id'), nullable=False, doc="Foreign key to the Quiz being attempted")
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, doc="Foreign key to the User making the attempt")
-    start_time = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the user started the attempt")
-    submit_time = db.Column(db.DateTime, nullable=True, doc="Timestamp when the user submitted the attempt (or when it timed out)")
-    score = db.Column(db.Float, nullable=True, doc="Final calculated score for this attempt (null until graded)")
-    max_score_possible = db.Column(db.Float, nullable=True, doc="Maximum possible score for the specific set of questions presented in this attempt (useful for pooled quizzes)")
-    status = db.Column(db.Enum(QuizAttemptStatus), default=QuizAttemptStatus.STARTED, nullable=False, doc="Current status of the quiz attempt")
-    cheating_flags = db.Column(db.Integer, default=0, doc="Counter for detected cheating events (e.g., tab switching, copy-paste), application logic defines meaning")
-    proctoring_violations = db.Column(db.Integer, default=0, doc="Counter for logged proctoring violations (e.g., person missing, multiple people detected)")
-    presented_question_ids = db.Column(db.Text, nullable=True, doc="JSON encoded list of Question IDs presented to the user in this specific attempt (especially important for random pooling)")
+    id = db.Column(db.Integer, primary_key=True)
 
-    # Relationships
-    # The quiz associated with this attempt
-    quiz = db.relationship('Quiz', back_populates='attempts', doc="The Quiz being attempted")
-    # The user who made this attempt
-    user = db.relationship('User', back_populates='quiz_attempts', doc="The User who made this attempt")
-    # All answers submitted by the user during this attempt
-    answers = db.relationship('StudentAnswer', back_populates='attempt', cascade='all, delete-orphan', lazy='dynamic', doc="Answers submitted during this attempt")
-    # Certificate generated for this attempt (if successful, one-to-one)
-    certificate = db.relationship('Certificate', back_populates='attempt', uselist=False, cascade="all, delete-orphan", doc="Certificate awarded for this attempt (if any)")
-    # Detailed logs of cheating/proctoring events detected during this attempt
-    cheating_logs = db.relationship('CheatingLog', back_populates='attempt', lazy='dynamic', cascade="all, delete-orphan", doc="Logs related to cheating or proctoring events during this attempt")
+    # --- Core Links ---
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True, doc="FK -> User Profile ID")
 
-    def set_presented_questions(self, question_ids: list):
-        """ Helper method to store the list of presented question IDs as a JSON string. """
-        if question_ids:
-            self.presented_question_ids = json.dumps(sorted(list(set(question_ids)))) # Store sorted unique IDs
-        else:
-            self.presented_question_ids = None
+    # --- Timing ---
+    start_time = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    submit_time = db.Column(db.DateTime(timezone=True), nullable=True, index=True)
+    deadline = db.Column(db.DateTime(timezone=True), nullable=True, index=True) # Auto-calculated on start
 
-    def get_presented_questions(self) -> list:
-        """ Helper method to retrieve the list of presented question IDs from the JSON string. """
-        if self.presented_question_ids:
-            try:
-                ids = json.loads(self.presented_question_ids)
-                return ids if isinstance(ids, list) else []
-            except json.JSONDecodeError:
-                return [] # Return empty list if JSON is invalid
-        return []
+    # --- Results ---
+    score = db.Column(db.Float, nullable=True)
+    max_score_possible = db.Column(db.Float, nullable=True)
+    status = db.Column(db.Enum(QuizAttemptStatus), default=QuizAttemptStatus.STARTED, nullable=False, index=True)
+    grading_completed_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
-    def __repr__(self):
-        """ String representation for QuizAttempt object. """
-        score_info = f", Score: {self.score}" if self.score is not None else ""
-        return f'<QuizAttempt ID:{self.id} by User:{self.user_id} for Quiz:{self.quiz_id} ({self.status.name}){score_info}>'
+    # --- Proctoring/Integrity ---
+    cheating_flags_json = db.Column(db.Text, nullable=True, doc="JSON object storing flags: {'tab_switches': 3, 'copy_paste': true}")
+    proctoring_violations = db.Column(db.Integer, default=0, nullable=False)
+    ip_address = db.Column(db.String(45), nullable=True)
+    user_agent = db.Column(db.String(255), nullable=True)
+
+    # --- Question Handling ---
+    presented_question_ids_json = db.Column(db.Text, default='[]', nullable=False)
+
+    # --- Relationships ---
+    quiz = db.relationship('Quiz', back_populates='attempts', foreign_keys=[quiz_id])
+    user = db.relationship('User', back_populates='quiz_attempts', foreign_keys=[user_id]) # Links to User profile
+    answers = db.relationship('StudentAnswer', back_populates='attempt', cascade="all, delete-orphan", passive_deletes=True, lazy='dynamic', foreign_keys='StudentAnswer.attempt_id')
+    certificate = db.relationship('Certificate', back_populates='attempt', uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    cheating_logs = db.relationship('CheatingLog', back_populates='attempt', lazy='dynamic', cascade="all, delete-orphan", passive_deletes=True, foreign_keys='CheatingLog.attempt_id')
+
+    def set_presented_questions(self, question_ids: List[int]) -> None:
+        self.presented_question_ids_json = json.dumps(sorted(list(set(question_ids))))
+
+    def get_presented_questions(self) -> List[int]:
+        try:
+            ids = json.loads(self.presented_question_ids_json or '[]')
+            return [int(id_val) for id_val in ids if isinstance(id_val, (int, str)) and str(id_val).isdigit()]
+        except: return []
+
+    def __repr__(self) -> str:
+        username = self.user.credentials.username if self.user and self.user.credentials else "N/A"
+        return f'<QuizAttempt ID:{self.id} by User:{username} (PID:{self.user_id}) for Quiz:{self.quiz_id} ({self.status.name if self.status else "N/A"})>'
 
 
 class StudentAnswer(db.Model):
-    """ Represents a user's answer to a single question within a specific quiz attempt. """
+    """ A user's answer to a specific question within an attempt. """
     __tablename__ = 'student_answers'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for this specific answer")
-    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id'), nullable=False, doc="Foreign key to the Quiz Attempt this answer belongs to")
-    question_id = db.Column(db.Integer, db.ForeignKey('questions.id'), nullable=False, doc="Foreign key to the Question being answered")
-    selected_option_id = db.Column(db.Integer, db.ForeignKey('question_options.id'), nullable=True, doc="Foreign key to the Question Option selected by the user (for MCQs)")
-    answer_text = db.Column(db.Text, nullable=True, doc="Text submitted by the user (for Fill-in-blanks, Short Answer)")
-    submitted_code = db.Column(db.Text, nullable=True, doc="Code submitted by the user (for Coding questions)")
-    is_correct = db.Column(db.Boolean, nullable=True, doc="Flag indicating if the answer was marked correct (null until graded)")
-    points_awarded = db.Column(db.Float, default=0, nullable=True, doc="Points awarded for this specific answer (can be partial, null until graded)")
-    time_spent_seconds = db.Column(db.Integer, nullable=True, doc="Optional: Time spent by the user on this specific question")
-    feedback = db.Column(db.Text, nullable=True, doc="Feedback provided for this specific answer (manual or automated)")
-    answered_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when this specific answer was submitted/saved")
-    grading_status = db.Column(db.Enum(GradingStatus), default=GradingStatus.PENDING, nullable=False, doc="Status of the grading process for this answer")
-    graded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, doc="Foreign key to the User who manually graded this answer (if applicable)")
+    id = db.Column(db.Integer, primary_key=True)
 
-    # Relationships
-    # The quiz attempt this answer is part of
-    attempt = db.relationship('QuizAttempt', back_populates='answers', doc="The Quiz Attempt this answer belongs to")
-    # The question being answered
-    question = db.relationship('Question', back_populates='student_answers', doc="The Question being answered")
-    # The MCQ option selected by the user (if applicable)
-    selected_option = db.relationship('QuestionOption', doc="The MCQ option selected by the user")
-    # The user who graded this answer (if manually graded)
-    grader = db.relationship('User', foreign_keys=[graded_by_user_id], doc="The User who performed manual grading")
+    # --- Core Links ---
+    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id', ondelete='CASCADE'), nullable=False, index=True)
+    question_id = db.Column(db.Integer, db.ForeignKey('questions.id', ondelete='CASCADE'), nullable=False, index=True)
 
-    def __repr__(self):
-        """ String representation for StudentAnswer object. """
+    # --- Answer Content ---
+    selected_option_id = db.Column(db.Integer, db.ForeignKey('question_options.id', ondelete='SET NULL'), nullable=True, index=True)
+    answer_text = db.Column(db.Text, nullable=True)
+    submitted_code = db.Column(db.Text, nullable=True)
+    code_language = db.Column(db.String(50), nullable=True)
+
+    # --- Grading & Feedback ---
+    is_correct = db.Column(db.Boolean, nullable=True, index=True)
+    points_awarded = db.Column(db.Float, default=0, nullable=True)
+    feedback = db.Column(db.Text, nullable=True)
+    grading_status = db.Column(db.Enum(GradingStatus), default=GradingStatus.PENDING, nullable=False, index=True)
+    # Changed FK target to users.id
+    graded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True, index=True, doc="FK -> User Profile ID of grader")
+    graded_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # --- Metadata ---
+    answered_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    time_spent_seconds = db.Column(db.Integer, nullable=True)
+    execution_result = db.Column(db.JSON, nullable=True, doc="JSON: {stdout, stderr, error, time_ms, memory_kb, passed_tests, total_tests}")
+
+    # --- Relationships ---
+    attempt = db.relationship('QuizAttempt', back_populates='answers', foreign_keys=[attempt_id])
+    question = db.relationship('Question', back_populates='student_answers', foreign_keys=[question_id])
+    selected_option = db.relationship('QuestionOption', foreign_keys=[selected_option_id])
+    grader = db.relationship('User', back_populates='graded_answers', foreign_keys=[graded_by_user_id]) # Links to User profile
+
+    def __repr__(self) -> str:
         grade_info = f"Correct: {self.is_correct}" if self.is_correct is not None else self.grading_status.name
         return f'<StudentAnswer {self.id} for Q{self.question_id} in Attempt {self.attempt_id} ({grade_info})>'
 
 
 class CheatingLog(db.Model):
-    """ Logs events related to potential cheating or proctoring violations during a quiz attempt. """
+    """ Log entry for a suspected cheating event. """
     __tablename__ = 'cheating_logs'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the log entry")
-    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id'), nullable=False, doc="Foreign key to the Quiz Attempt during which the event occurred")
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, doc="Foreign key to the User associated with the event (redundant but useful for querying)")
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the event was logged")
-    event_type = db.Column(db.String(50), nullable=False, doc="Type of event logged (e.g., 'TabSwitch', 'CopyPaste', 'FaceNotDetected', 'MultipleFaces')")
-    details = db.Column(db.Text, nullable=True, doc="Additional details about the event (e.g., window title switched to, confidence score from AI detection)")
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id', ondelete='CASCADE'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True, doc="FK -> User Profile ID") # Direct link useful for queries
+    timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    event_type = db.Column(db.String(50), nullable=False, index=True)
+    details = db.Column(db.Text, nullable=True)
+    severity = db.Column(db.String(20), nullable=True) # Consider Enum
 
-    # Relationships
-    # The quiz attempt associated with this log
-    attempt = db.relationship('QuizAttempt', back_populates='cheating_logs', doc="The Quiz Attempt related to this log")
-    # The user associated with this log
-    user = db.relationship('User', doc="The User related to this log") # Simple relationship for querying user info
+    # --- Relationships ---
+    attempt = db.relationship('QuizAttempt', back_populates='cheating_logs', foreign_keys=[attempt_id])
+    user = db.relationship('User', back_populates='cheating_logs', foreign_keys=[user_id]) # Links to User profile
 
-    def __repr__(self):
-        """ String representation for CheatingLog object. """
-        return f'<CheatingLog {self.id} for Attempt {self.attempt_id} ({self.event_type}) at {self.timestamp}>'
+    def __repr__(self) -> str:
+        return f'<CheatingLog {self.id} for Attempt {self.attempt_id} (UserPID:{self.user_id}) ({self.event_type})>'
 
 
 class Badge(db.Model):
-    """ Represents a gamification badge that users can earn for achievements. """
+    """ Gamification achievement badge. """
     __tablename__ = 'badges'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the badge")
-    name = db.Column(db.String(100), unique=True, nullable=False, doc="Name of the badge (e.g., 'Quiz Master', 'Speed Demon')")
-    description = db.Column(db.Text, nullable=False, doc="Description explaining what the badge represents")
-    icon_url = db.Column(db.String(255), nullable=True, doc="URL to an image/icon representing the badge")
-    criteria = db.Column(db.Text, nullable=True, doc="Text describing the criteria for earning this badge")
-
-    # Relationship back to users who have earned this badge
-    users = db.relationship('User', secondary=user_badges, back_populates='badges', lazy='dynamic', doc="Users who have earned this badge")
-
-    def __repr__(self):
-        """ String representation for Badge object. """
-        return f'<Badge {self.id}: {self.name}>'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    description = db.Column(db.Text, nullable=False)
+    icon_url = db.Column(db.String(512), nullable=True)
+    criteria_text = db.Column(db.Text, nullable=True) # Human-readable criteria
+    criteria_config = db.Column(db.JSON, nullable=True) # Machine-readable criteria for automation
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    users = db.relationship('User', secondary=user_badges, back_populates='badges', lazy='dynamic') # Links User profiles
+    def __repr__(self) -> str: return f'<Badge {self.id}: {self.name}>'
 
 
 class Certificate(db.Model):
-    """ Represents a certificate generated upon successful completion of a quiz attempt. """
+    """ Verifiable certificate awarded for quiz completion. """
     __tablename__ = 'certificates'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the certificate")
-    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id'), unique=True, nullable=False, doc="Foreign key linking to the specific Quiz Attempt this certificate is for")
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, doc="Foreign key to the User who earned the certificate")
-    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id'), nullable=False, doc="Foreign key to the Quiz for which the certificate was earned")
-    generated_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the certificate was generated")
-    unique_code = db.Column(db.String(100), unique=True, nullable=False, doc="Unique code for verification purposes")
-    # Snapshot of key data at the time of generation
-    user_name = db.Column(db.String(100), doc="User's name as it appears on the certificate")
-    quiz_title = db.Column(db.String(100), doc="Quiz title as it appears on the certificate")
-    final_score = db.Column(db.Float, doc="Final score achieved, as shown on the certificate")
-    # pdf_url = db.Column(db.String(255), nullable=True) # Optional: If storing a link to a generated PDF file
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_id = db.Column(db.Integer, db.ForeignKey('quiz_attempts.id', ondelete='CASCADE'), unique=True, nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True, doc="FK -> User Profile ID")
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), nullable=False, index=True)
+    generated_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    unique_code = db.Column(db.String(100), unique=True, nullable=False, index=True)
+    # Snapshot data
+    user_display_name = db.Column(db.String(100))
+    user_email = db.Column(db.String(120))
+    quiz_title = db.Column(db.String(150))
+    final_score = db.Column(db.Float)
+    issued_by_name = db.Column(db.String(150), default="CodeQuizHub")
+    pdf_url = db.Column(db.String(512), nullable=True)
 
-    # Relationships
-    # The specific quiz attempt that earned this certificate
-    attempt = db.relationship('QuizAttempt', back_populates='certificate', doc="The Quiz Attempt that resulted in this certificate")
-    # The user who earned the certificate
-    user = db.relationship('User', doc="The User who earned this certificate") # Simple relationship
-    # The quiz associated with the certificate
-    quiz = db.relationship('Quiz', back_populates='certificates', doc="The Quiz for which this certificate was issued") # Simple relationship
+    # --- Relationships ---
+    attempt = db.relationship('QuizAttempt', back_populates='certificate', foreign_keys=[attempt_id])
+    user = db.relationship('User', back_populates='certificates', foreign_keys=[user_id]) # Links to User profile
+    quiz = db.relationship('Quiz', back_populates='certificates', foreign_keys=[quiz_id])
 
-    def __repr__(self):
-        """ String representation for Certificate object. """
-        return f'<Certificate {self.id} ({self.unique_code}) for User:{self.user_id}, Quiz:{self.quiz_id}>'
+    def __repr__(self) -> str: return f'<Certificate {self.id} ({self.unique_code}) for UserPID:{self.user_id}, Quiz:{self.quiz_id}>'
 
 
 class Notification(db.Model):
-    """ Represents a notification sent to a user within the platform. """
+    """ In-app notification for users. """
     __tablename__ = 'notifications'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the notification")
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, doc="Foreign key to the User who should receive this notification")
-    message = db.Column(db.Text, nullable=False, doc="The content of the notification message")
-    is_read = db.Column(db.Boolean, default=False, nullable=False, doc="Flag indicating if the user has read the notification")
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, doc="Timestamp when the notification was created")
-    # Optional fields to link the notification to a relevant object
-    related_object_type = db.Column(db.String(50), nullable=True, doc="Type of the related object (e.g., 'Quiz', 'Badge', 'FriendRequest')")
-    related_object_id = db.Column(db.Integer, nullable=True, doc="ID of the related object")
-    link_url = db.Column(db.String(512), nullable=True, doc="Optional URL to navigate to when the notification is clicked")
-
-    # Relationship back to the user
-    user = db.relationship('User', back_populates='notifications', doc="The User this notification belongs to")
-
-    def __repr__(self):
-        """ String representation for Notification object. """
-        read_status = "Read" if self.is_read else "Unread"
-        return f'<Notification {self.id} for User:{self.user_id} ({read_status}) - {self.message[:30]}...>'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True, doc="FK -> User Profile ID")
+    message = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    read_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    notification_type = db.Column(db.String(50), nullable=True, index=True) # Consider Enum
+    # Generic Linking - store type and ID of related object
+    related_object_type = db.Column(db.String(50), nullable=True, index=True)
+    related_object_id = db.Column(db.Integer, nullable=True, index=True)
+    link_url = db.Column(db.String(512), nullable=True) # Direct navigation URL
+    user = db.relationship('User', back_populates='notifications', foreign_keys=[user_id]) # Links to User profile
+    def __repr__(self) -> str: read_status = "Read" if self.is_read else "Unread"; return f'<Notification {self.id} for UserPID:{self.user_id} ({read_status}) Type:{self.notification_type}>'
 
 
 class AuditLog(db.Model):
-    """ Logs significant actions performed by administrators for auditing purposes. """
+    """ Record of significant actions, primarily by Admins. """
     __tablename__ = 'audit_logs'
-    id = db.Column(db.Integer, primary_key=True, doc="Unique identifier for the audit log entry")
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, doc="Timestamp when the action occurred")
-    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, doc="Foreign key to the Admin User who performed the action")
-    action = db.Column(db.String(255), nullable=False, doc="Description of the action performed (e.g., 'approve_organization', 'delete_user', 'update_quiz_status')")
-    target_type = db.Column(db.String(50), nullable=True, doc="Type of the object affected by the action (e.g., 'Organization', 'User', 'Quiz')")
-    target_id = db.Column(db.Integer, nullable=True, doc="ID of the object affected by the action")
-    details = db.Column(db.Text, nullable=True, doc="Optional additional details, potentially JSON containing old/new values or context")
+    id = db.Column(db.Integer, primary_key=True)
+    timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
+    admin_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="FK -> Admin's User Profile ID (Nullable if system action or user deleted)")
+    action = db.Column(db.String(255), nullable=False, index=True)
+    target_type = db.Column(db.String(50), nullable=True, index=True)
+    target_id = db.Column(db.Integer, nullable=True, index=True)
+    details = db.Column(db.Text, nullable=True) # Can store JSON diffs or context
+    ip_address = db.Column(db.String(45), nullable=True)
+    admin_user = db.relationship('User', back_populates='audit_logs_created', foreign_keys=[admin_user_id]) # Links to User profile
+    def __repr__(self) -> str: target_info = f" ({self.target_type} ID:{self.target_id})" if self.target_type and self.target_id else ""; return f'<AuditLog {self.id} by AdminPID:{self.admin_user_id} @ {self.timestamp} - Action: {self.action}{target_info}>'
 
-    # Relationship to the Admin user who performed the action
-    admin_user = db.relationship('User', back_populates='audit_logs_created', foreign_keys=[admin_user_id], doc="The Admin User who performed the logged action")
+
+# --- New Table: Organization Invitations ---
+# Handles inviting users (teachers, students) to join an organization.
+
+class OrganizationInvitation(db.Model):
+    """ Records invitations sent to users to join an organization. """
+    __tablename__ = 'organization_invitations'
+    id = db.Column(db.Integer, primary_key=True)
+    organization_id = db.Column(db.Integer, db.ForeignKey('organizations.id', ondelete='CASCADE'), nullable=False, index=True)
+    # Email is used because the user might not exist yet
+    invitee_email = db.Column(db.String(120), nullable=False, index=True)
+    # Store the role the user is being invited *as*
+    invited_as_role = db.Column(db.Enum(UserRole), nullable=False, default=UserRole.STUDENT)
+    invitation_token = db.Column(db.String(100), unique=True, nullable=False, index=True, doc="Secure token for the invitation link")
+    status = db.Column(db.Enum(InvitationStatus), default=InvitationStatus.PENDING, nullable=False, index=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc) + timedelta(days=7)) # Example: 7-day expiry
+    # Who sent the invite? (Org Admin or Teacher)
+    inviter_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="User profile ID of the inviter")
+    # When accepted, link to the actual user profile created/linked
+    accepted_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="User profile ID of the user who accepted")
+    accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Relationships
+    organization = db.relationship('Organization', back_populates='invitations', foreign_keys=[organization_id])
+    # Link to the user profile that sent the invitation
+    inviter = db.relationship('User', back_populates='invitations_sent', foreign_keys=[inviter_user_id])
+    # Link to the user profile that accepted (use email to find potential existing user first)
+    # Relationship for accepted_by_user_id is less direct, often handled in logic
+    # invitee = db.relationship('User', foreign_keys=[accepted_by_user_id]) # Can add if needed
+
+    # Relationship to find User via email (handled in application logic or a complex primaryjoin)
+    invitee = db.relationship('User', back_populates='invitations_received', foreign_keys='OrganizationInvitation.invitee_email', primaryjoin='foreign(OrganizationInvitation.invitee_email) == User.email', viewonly=True)
+
+
+    def __repr__(self) -> str:
+        status = self.status.name if self.status else "N/A"
+        return f'<OrgInvitation {self.id} for {self.invitee_email} to OrgID:{self.organization_id} ({status})>'
+
+
+# --- New Model Wrapper for quiz_assignments Association Object ---
+# Allows adding more attributes to the assignment itself (like assigned_by)
+
+class QuizAssignment(db.Model):
+    """ Association object for Quiz-to-Student assignments, allowing extra fields. """
+    __tablename__ = 'quiz_assignments' # Reuse the association table name
+
+    # Composite primary key from the association table definition
+    quiz_id = db.Column(db.Integer, db.ForeignKey('quizzes.id', ondelete='CASCADE'), primary_key=True, index=True)
+    student_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True, index=True, doc="FK -> User profile ID of the assigned Student")
+
+    # Additional fields compared to the simple association table
+    assigned_at = db.Column(db.DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    assigned_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True, doc="FK -> User profile ID of the Teacher/Admin who assigned")
+    due_date = db.Column(db.DateTime(timezone=True), nullable=True, index=True, doc="Optional due date for the assignment")
+
+    # --- Relationships ---
+    # Many-to-One back to Quiz
+    quiz = db.relationship('Quiz', back_populates='assignments')
+    # Many-to-One back to Student User profile
+    student = db.relationship('User', foreign_keys=[student_user_id]) # No backref needed here as User.assigned_quizzes covers it
+    # Many-to-One back to the assigner User profile
+    assigner = db.relationship('User', back_populates='assignments_created', foreign_keys=[assigned_by_user_id])
 
     def __repr__(self):
-        """ String representation for AuditLog object. """
-        target_info = f" ({self.target_type} ID:{self.target_id})" if self.target_type else ""
-        return f'<AuditLog {self.id} at {self.timestamp} by Admin:{self.admin_user_id} - Action: {self.action}{target_info}>'
+        return f'<QuizAssignment Quiz:{self.quiz_id} to Student:{self.student_user_id} by User:{self.assigned_by_user_id}>'
 
 
-# --- End of refined models.py ---
+# --- End of models.py ---
