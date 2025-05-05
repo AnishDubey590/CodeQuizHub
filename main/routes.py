@@ -12,7 +12,7 @@ def index():
     if current_user.is_authenticated:
         # If logged in, redirect to role-specific dashboard immediately
         return redirect(url_for('main.dashboard'))
-    return render_template('index.html', title='Welcome')
+    return render_template('main/index.html', title='Welcome')
 
 @main_bp.route('/dashboard')
 @login_required

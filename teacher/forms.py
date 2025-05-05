@@ -77,7 +77,12 @@ class QuizForm(FlaskForm):
     end_time_str = StringField('End Time (Optional - YYYY-MM-DD HH:MM)', validators=[WtformsOptional()])
 
     duration_minutes = IntegerField('Duration (Minutes)', default=60, validators=[DataRequired(), NumberRange(min=1)])
-    status = SelectField('Status', choices=[(s.value, s.value) for s in QuizStatus if s != QuizStatus.ACTIVE], default=QuizStatus.DRAFT.value, validators=[DataRequired()]) # Exclude ACTIVE? Or handle in logic
+    # Corrected line - removed the invalid condition 'if s != QuizStatus.ACTIVE'
+    status = SelectField('Status',
+                     choices=[(s.value, s.value) for s in QuizStatus], # List all defined statuses
+                     default=QuizStatus.DRAFT.value,
+                     validators=[DataRequired()])
+
     max_attempts = IntegerField('Max Attempts (0 for unlimited)', default=1, validators=[DataRequired(), NumberRange(min=0)])
     selection_strategy = SelectField('Question Selection', choices=[(s.value, s.value) for s in QuestionSelectionStrategy], default=QuestionSelectionStrategy.FIXED.value, validators=[DataRequired()])
     num_questions_to_pool = IntegerField('Number of Questions to Pool (if Random)', validators=[WtformsOptional(), NumberRange(min=1)])
