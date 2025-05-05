@@ -1,0 +1,46 @@
+{# /your_app/templates/user/friends_list.html #}
+{% extends "base.html" %}
+{# {% from "_formhelpers.html" import render_field %} #}
+
+{% block title %}My Friends{% endblock %}
+
+{% block content %}
+ <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">My Friends</h1>
+</div>
+
+{# Form to add a friend #}
+<form method="POST" action="{{ url_for('user.add_friend') }}" class="row g-3 align-items-center mb-4">
+     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+     <div class="col-auto">
+        <label for="friend_username" class="visually-hidden">Username</label>
+        <input type="text" class="form-control" id="friend_username" name="friend_username" placeholder="Enter username to add" required>
+    </div>
+     <div class="col-auto">
+        <button type="submit" class="btn btn-success"><i class="fas fa-user-plus me-2"></i>Add Friend</button>
+    </div>
+</form>
+
+
+{% if friends %}
+    <ul class="list-group">
+    {% for friend_profile in friends %}
+         <li class="list-group-item d-flex justify-content-between align-items-center">
+             <span>
+                  {# TODO: Link to friend's profile if public profiles exist #}
+                  {{ friend_profile.display_name or friend_profile.credentials.username }}
+             </span>
+             {# TODO: Add button/form to remove friend #}
+             <form action="#" method="POST" style="display: inline;">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                   <input type="hidden" name="friend_id" value="{{ friend_profile.id }}">
+                   <button type="submit" class="btn btn-sm btn-outline-danger" title="Remove Friend"><i class="fas fa-user-minus"></i> Remove</button>
+             </form>
+         </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>You haven't added any friends yet. Use the form above to add friends by their username.</p>
+{% endif %}
+
+{% endblock %}

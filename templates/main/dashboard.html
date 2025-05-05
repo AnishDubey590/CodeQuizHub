@@ -1,53 +1,55 @@
+{# /your_app/templates/index.html #}
 {% extends "base.html" %}
 
-{% block title %}CodeQuiz Hub - Conduct & Participate{% endblock %}
+{% block title %}Welcome to CodeQuiz Hub{% endblock %}
 
 {% block content %}
-<!-- Hero Section -->
-<section class="text-center w-full h-[50vh] bg-gradient-to-r from-primary to-secondary text-white flex flex-col items-center justify-center fade-in pt-20">
-    <h1 class="text-4xl font-extrabold">Conduct & Participate in Coding Quizzes</h1>
-    <p class="mt-3 text-lg px-4 md:px-0">A seamless platform for organizations to create quizzes and coding challenges.</p>
-</section>
-
-<!-- Features Section -->
-<section id="features" class="py-20 px-10 slide-in">
-    <h2 class="text-3xl font-bold text-center mb-10">Why Choose CodeQuiz Hub?</h2>
-    <div class="grid md:grid-cols-3 gap-6">
-        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
-            <h3 class="text-xl font-bold text-primary">Multiple Quiz Formats</h3>
-            <p class="mt-2">MCQ, Coding, Fill-in-the-Blanks, and Comprehension.</p>
-        </div>
-        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
-            <h3 class="text-xl font-bold text-primary">Real-time Leaderboards</h3>
-            <p class="mt-2">Live scoring and ranking for participants.</p>
-        </div>
-        <div class="p-6 bg-white shadow-lg rounded-lg transition-all duration-500 ease-in-out transform hover:scale-105 hover:shadow-2xl fade-in">
-            <h3 class="text-xl font-bold text-primary">Integrated Coding IDE</h3>
-            <p class="mt-2">Write and run code directly in the platform.</p>
-        </div>
+<div class="px-4 py-5 my-5 text-center">
+    <i class="fas fa-laptop-code fa-3x text-primary mb-4"></i>
+    <h1 class="display-5 fw-bold">CodeQuiz Hub</h1>
+    <div class="col-lg-6 mx-auto">
+      <p class="lead mb-4">
+          The ultimate platform for creating, taking, and managing coding quizzes and technical assessments.
+          Perfect for individuals, educational institutions, and organizations.
+      </p>
+      <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
+        {% if not current_user.is_authenticated %}
+        <a href="{{ url_for('auth.login') }}" type="button" class="btn btn-primary btn-lg px-4 gap-3">Login</a>
+        <a href="{{ url_for('auth.register') }}" type="button" class="btn btn-outline-secondary btn-lg px-4">Register</a>
+        {% else %}
+        <a href="{{ url_for('main.dashboard') }}" type="button" class="btn btn-primary btn-lg px-4 gap-3">Go to Dashboard</a>
+        {% endif %}
+      </div>
     </div>
-</section>
+</div>
 
-<!-- How It Works Section -->
-<section id="how-it-works" class="py-20 px-10 slide-in">
-    <h2 class="text-3xl font-bold text-center mb-10">How It Works</h2>
-    <div class="grid md:grid-cols-4 gap-6 text-center">
-        <div class="p-6 bg-white shadow-lg rounded-lg">
-            <h3 class="text-xl font-bold text-primary">1. Register</h3>
-            <p>Organizations sign up & create quizzes.</p>
-        </div>
-        <div class="p-6 bg-white shadow-lg rounded-lg">
-            <h3 class="text-xl font-bold text-primary">2. Join</h3>
-            <p>Students enroll & take quizzes.</p>
-        </div>
-        <div class="p-6 bg-white shadow-lg rounded-lg">
-            <h3 class="text-xl font-bold text-primary">3. Get Results</h3>
-            <p>Auto-grading & instant feedback.</p>
-        </div>
-        <div class="p-6 bg-white shadow-lg rounded-lg">
-            <h3 class="text-xl font-bold text-primary">4. Analyze</h3>
-            <p>Compare results & track performance.</p>
-        </div>
+<div class="container px-4 py-5" id="featured-3">
+    <h2 class="pb-2 border-bottom text-center">Features</h2>
+    <div class="row g-4 py-5 row-cols-1 row-cols-lg-3">
+      <div class="feature col text-center">
+          <div class="feature-icon d-inline-flex align-items-center justify-content-center text-bg-primary bg-gradient fs-2 mb-3 p-2 rounded">
+            <i class="fas fa-sitemap"></i>
+          </div>
+        <h3 class="fs-2">For Organizations</h3>
+        <p>Register your institution, manage teachers & students, create custom quizzes with various question types, assign tests, and analyze performance.</p>
+        {# <a href="#" class="icon-link">Learn more <i class="fas fa-chevron-right"></i></a> #}
+      </div>
+      <div class="feature col text-center">
+         <div class="feature-icon d-inline-flex align-items-center justify-content-center text-bg-success bg-gradient fs-2 mb-3 p-2 rounded">
+            <i class="fas fa-user-graduate"></i>
+          </div>
+        <h3 class="fs-2">For Students & Users</h3>
+        <p>Take assigned quizzes, practice with public tests, compete with friends, track your progress, and earn badges for your achievements.</p>
+        {# <a href="#" class="icon-link">Learn more <i class="fas fa-chevron-right"></i></a> #}
+      </div>
+      <div class="feature col text-center">
+         <div class="feature-icon d-inline-flex align-items-center justify-content-center text-bg-warning bg-gradient fs-2 mb-3 p-2 rounded">
+            <i class="fas fa-shield-alt"></i>
+          </div>
+        <h3 class="fs-2">Secure & Fair</h3>
+        <p>Features optional proctoring tools (camera, screen sharing) and AI-based integrity checks to ensure fair assessment environments.</p>
+        {# <a href="#" class="icon-link">Learn more <i class="fas fa-chevron-right"></i></a> #}
+      </div>
     </div>
-</section>
+</div>
 {% endblock %}

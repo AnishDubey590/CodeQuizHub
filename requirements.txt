@@ -1,0 +1,16 @@
+# /requirements.txt
+Flask>=2.0
+Flask-SQLAlchemy>=2.5
+Flask-Migrate>=3.0
+Flask-Login>=0.5
+Flask-WTF>=1.0 # Includes WTForms
+Werkzeug>=2.0 # For password hashing
+python-dotenv>=0.15 # For loading .env files
+psycopg2-binary # If using PostgreSQL (recommended for production)
+pandas>=1.0     # For Bulk Upload
+openpyxl>=3.0   # Required by pandas for Excel (.xlsx) support
+requests>=2.20  # For calling external APIs (compiler, AI)
+Flask-Mail>=0.9 # For sending emails (invitations, password resets)
+# Optional:
+# Flask-SocketIO # For real-time scoreboard
+# gunicorn # For production deployment

@@ -1,100 +1,61 @@
+{# /your_app/templates/auth/organization_register.html #}
 {% extends "base.html" %}
+{% from "_formhelpers.html" import render_field %}
 
-{% block title %}Organization Registration{% endblock %}
+{% block title %}Register Organization - CodeQuiz Hub{% endblock %}
 
 {% block content %}
-<div class="max-w-2xl mx-auto mt-10 p-6 bg-white rounded-2xl shadow-md">
-    <h2 class="text-2xl font-semibold text-center mb-4">Register Your Organization</h2>
-    <p class="text-gray-600 text-center mb-6">
-        Create an account for your organization and its primary administrator.<br>
-        Your registration will be reviewed by a platform administrator before activation.
-    </p>
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8 col-lg-7">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h2 class="card-title text-center mb-4">Register Your Organization</h2>
+                <p class="text-center text-muted mb-4">
+                    Submit your organization details and create the primary administrator account.
+                    Your registration will be reviewed by a platform admin before activation.
+                </p>
 
-    <form method="POST" action="{{ url_for('auth.organization_register') }}" novalidate class="space-y-6">
-        {# CSRF token if using Flask-WTF #}
-        {# {{ form.csrf_token }} #}
+                <form method="POST" action="{{ url_for('auth.organization_register') }}" novalidate>
+                     {{ form.hidden_tag() }} {# CSRF Token #}
 
-        <div>
-            <h3 class="text-lg font-medium mb-2">Organization Details</h3>
-            <div class="border-t border-gray-200 mb-4"></div>
+                    <h5 class="mb-3">Organization Details</h5>
+                    <hr class="mb-3 hr-grey">
 
-            <label for="org_name" class="block text-sm font-medium text-gray-700">Organization Name <span class="text-red-500">*</span></label>
-            <input type="text" id="org_name" name="org_name" required
-                   placeholder="e.g., Example University, Tech Corp Inc."
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
+                    {{ render_field(form.org_name, class="form-control", placeholder="e.g., Example University, Tech Corp Inc.") }}
+                    {{ render_field(form.org_description, class="form-control", rows=3, placeholder="Briefly describe your organization") }}
+                    {{ render_field(form.website_url, type="url", class="form-control", placeholder="https://www.example.com (Optional)") }}
 
-            <label for="org_description" class="block mt-4 text-sm font-medium text-gray-700">Organization Description</label>
-            <textarea id="org_description" name="org_description" rows="3"
-                      placeholder="Briefly describe your organization (optional)"
-                      class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border"></textarea>
+
+                    <h5 class="mt-4 mb-3">Administrator Account Details</h5>
+                    <hr class="mb-3 hr-grey">
+                    <p class="text-muted small mb-3">This user will manage your organization's account on CodeQuiz Hub.</p>
+
+                    {{ render_field(form.admin_username, class="form-control", autocomplete="username", placeholder="Choose a unique admin username") }}
+                    {{ render_field(form.admin_email, type="email", class="form-control", autocomplete="email", placeholder="admin.email@yourorg.com") }}
+                    {{ render_field(form.admin_display_name, class="form-control", autocomplete="name", placeholder="Administrator's full name (Optional)") }}
+                    {{ render_field(form.admin_password, type="password", class="form-control", autocomplete="new-password", placeholder="Choose a strong admin password (min 8 chars)") }}
+                    {{ render_field(form.admin_confirm_password, type="password", class="form-control", autocomplete="new-password", placeholder="Confirm admin password") }}
+
+
+                    <div class="d-grid mt-4">
+                         {{ form.submit(class="btn btn-info btn-lg text-dark") }}
+                    </div>
+                </form>
+
+                 <hr class="mt-4">
+                 <div class="text-center small mt-3">
+                     <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
+                     <p>Registering as an individual user? <a href="{{ url_for('auth.register') }}">Click here</a></p>
+                </div>
+            </div>
         </div>
-
-        <div>
-            <h3 class="text-lg font-medium mt-8 mb-2">Administrator Account Details</h3>
-            <div class="border-t border-gray-200 mb-2"></div>
-            <p class="text-sm text-gray-500 mb-4">This user will manage your organization's account, create quizzes, and add students.</p>
-
-            <label for="admin_username" class="block text-sm font-medium text-gray-700">Administrator Username <span class="text-red-500">*</span></label>
-            <input type="text" id="admin_username" name="admin_username" required
-                   placeholder="Choose a unique username"
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-
-            <label for="admin_email" class="block mt-4 text-sm font-medium text-gray-700">Administrator Email <span class="text-red-500">*</span></label>
-            <input type="email" id="admin_email" name="admin_email" required
-                   placeholder="admin@yourorganization.com"
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-
-            <label for="admin_password" class="block mt-4 text-sm font-medium text-gray-700">Administrator Password <span class="text-red-500">*</span></label>
-            <input type="password" id="admin_password" name="admin_password" required
-                   placeholder="Choose a strong password"
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-
-            <label for="admin_confirm_password" class="block mt-4 text-sm font-medium text-gray-700">Confirm Administrator Password <span class="text-red-500">*</span></label>
-            <input type="password" id="admin_confirm_password" name="admin_confirm_password" required
-                   placeholder="Re-enter the password"
-                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500 p-2 border">
-        </div>
-
-        <div class="pt-4">
-            <button type="submit"
-                    class="w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-lg hover:bg-blue-700 transition">
-                Request Registration
-            </button>
-        </div>
-    </form>
-
-    <p class="text-center text-sm text-gray-600 mt-6">
-        Already have an account?
-        <a href="{{ url_for('auth.login') }}" class="text-blue-600 hover:underline">Login here</a>
-    </p>
+    </div>
 </div>
+<style>
+    .hr-grey { border-top: 1px solid #ccc; }
+</style>
 {% endblock %}
-
 {% block scripts %}
-{{ super() }}
-<script>
-    (function () {
-        'use strict'
-        var forms = document.querySelectorAll('form[novalidate]')
-        Array.prototype.slice.call(forms)
-            .forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-                    const password = form.querySelector('#admin_password');
-                    const confirmPassword = form.querySelector('#admin_confirm_password');
-                    if (password && confirmPassword && password.value !== confirmPassword.value) {
-                        confirmPassword.setCustomValidity("Passwords do not match.");
-                        event.preventDefault();
-                        event.stopPropagation();
-                    } else if (confirmPassword) {
-                        confirmPassword.setCustomValidity("");
-                    }
-                    form.classList.add('was-validated')
-                }, false)
-            })
-    })()
-</script>
+ {{ super() }}
+{# Include validation script similar to login page if needed #}
 {% endblock %}

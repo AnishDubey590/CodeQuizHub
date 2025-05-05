@@ -1,7 +1,7 @@
-# /your_app/admin/__init__.py
+# /your_app/user/__init__.py
 from flask import Blueprint
 
-admin_bp = Blueprint('admin', __name__)
+user_bp = Blueprint('user', __name__)
 
 # Import routes after blueprint definition
 from . import routes

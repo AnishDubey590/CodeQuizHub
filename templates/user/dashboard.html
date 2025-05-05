@@ -1,0 +1,49 @@
+{# /your_app/templates/user/dashboard.html #}
+{% extends "base.html" %}
+
+{% block title %}User Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">User Dashboard</h1>
+</div>
+
+<p>Welcome back, {{ user_profile.display_name or current_user.username }}!</p>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-users me-2"></i>Friends</h5>
+                <p class="card-text display-6">{{ friend_count }}</p> {# TODO: Pass actual count #}
+                <a href="{{ url_for('user.friends_list') }}" class="btn btn-info">View Friends</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+             <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-list-alt me-2"></i>Public Quizzes</h5>
+                <p class="card-text display-6">{{ public_quizzes_taken }}</p> {# TODO: Pass actual count #}
+                <a href="{{ url_for('user.public_quizzes') }}" class="btn btn-info">Browse Quizzes</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+             <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-trophy me-2"></i>My Points</h5>
+                <p class="card-text display-6">{{ user_profile.gamification_points }}</p>
+                {# TODO: Link to results/gamification page #}
+                <a href="#" class="btn btn-info">View Progress</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mt-4">Actions</h3>
+{# TODO: List public quizzes available, link to friend management #}
+ <p><a href="{{ url_for('user.public_quizzes') }}" class="btn btn-outline-primary">Take a Public Quiz</a></p>
+ <p><a href="{{ url_for('user.friends_list') }}" class="btn btn-outline-secondary">Manage Friends</a></p>
+
+{% endblock %}

@@ -1,0 +1,59 @@
+{# /your_app/templates/teacher/dashboard.html #}
+{% extends "base.html" %}
+
+{% block title %}Teacher Dashboard{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Teacher Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        {# Add quick action buttons if needed #}
+        <a href="{{ url_for('teacher.create_quiz') }}" class="btn btn-sm btn-outline-success me-2">
+            <i class="fas fa-plus"></i> Create Quiz
+        </a>
+         <a href="{{ url_for('teacher.create_question') }}" class="btn btn-sm btn-outline-primary">
+            <i class="fas fa-plus"></i> Create Question
+        </a>
+    </div>
+</div>
+
+<p>Welcome, {{ current_user.user_profile.display_name or current_user.username }}!</p>
+<p>Organization: <strong>{{ org.name }}</strong></p>
+
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card text-center">
+            <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-chalkboard-teacher me-2"></i>My Quizzes</h5>
+                <p class="card-text display-6">{{ my_quizzes_count }}</p>
+                <a href="{{ url_for('teacher.manage_quizzes') }}" class="btn btn-secondary">View Quizzes</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center">
+             <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-tasks me-2"></i>Assignments Sent</h5>
+                <p class="card-text display-6">{{ my_assignments_count }}</p>
+                <a href="{{ url_for('teacher.view_assignments') }}" class="btn btn-secondary">View Assignments</a>
+            </div>
+        </div>
+    </div>
+     <div class="col-md-4">
+        <div class="card text-center">
+             <div class="card-body">
+                <h5 class="card-title"><i class="fas fa-users me-2"></i>Students (Org Total)</h5>
+                {# Note: This currently shows total students in org, not just teacher's specific students #}
+                <p class="card-text display-6">{{ my_students_count }}</p>
+                {# Link to results overview for now #}
+                <a href="{{ url_for('teacher.view_student_results') }}" class="btn btn-secondary">View Results</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h3 class="mt-4">Recent Activity / Overview</h3>
+{# TODO: Add lists of recent assignments, quizzes needing grading, etc. #}
+<p class="text-muted">Placeholder for recent activity...</p>
+
+{% endblock %}

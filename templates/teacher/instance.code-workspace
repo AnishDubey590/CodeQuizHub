@@ -1,0 +1,21 @@
+{
+	"folders": [
+		{
+			"name": "instance",
+			"path": "Y:/RTP/CodeQuiz/instance"
+		},
+		{
+			"name": "CodeQuizHub",
+			"path": "../.."
+		},
+		{
+			"name": ".dist",
+			"path": "Y:/RTP/CodeQuiz/.dist"
+		},
+		{
+			"name": "Backend",
+			"path": "Y:/RTP/CodeQuiz/Backend"
+		}
+	],
+	"settings": {}
+}

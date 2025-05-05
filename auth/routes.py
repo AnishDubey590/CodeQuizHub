@@ -1,264 +1,77 @@
-# your_app/auth/routes.py
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+# /your_app/auth/routes.py
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-# Removed generate_password_hash as it's handled by user.set_password()
-# Removed check_password_hash as it's handled by user.check_password()
-from ..models import db, User, UserRole, Organization, OrgApprovalStatus # Import necessary models
+from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy.exc import IntegrityError
+from datetime import datetime, timezone
 
-# --- Recommendation: Use Flask-WTF for Forms ---
-# from flask_wtf import FlaskForm
-# from wtforms import StringField, PasswordField, BooleanField, SubmitField, TextAreaField
-# from wtforms.validators import DataRequired, Length, Email, EqualTo, ValidationError
-# from ..models import User, Organization # Import models for custom validators if needed
-#
-# class RegistrationForm(FlaskForm):
-#     username = StringField('Username', validators=[DataRequired(), Length(min=4, max=80)])
-#     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=120)])
-#     password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
-#     confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password')])
-#     submit = SubmitField('Register')
-#
-#     def validate_username(self, username):
-#         user = User.query.filter_by(username=username.data).first()
-#         if user:
-#             raise ValidationError('That username is already taken. Please choose a different one.')
-#
-#     def validate_email(self, email):
-#         user = User.query.filter_by(email=email.data).first()
-#         if user:
-#             raise ValidationError('That email is already in use. Please choose a different one.')
-#
-# class OrganizationRegistrationForm(FlaskForm):
-#     org_name = StringField('Organization Name', validators=[DataRequired(), Length(max=100)])
-#     org_description = TextAreaField('Organization Description', validators=[Length(max=500)]) # Optional field length limit
-#     admin_username = StringField('Administrator Username', validators=[DataRequired(), Length(min=4, max=80)])
-#     admin_email = StringField('Administrator Email', validators=[DataRequired(), Email(), Length(max=120)])
-#     admin_password = PasswordField('Administrator Password', validators=[DataRequired(), Length(min=6)])
-#     admin_confirm_password = PasswordField('Confirm Administrator Password', validators=[DataRequired(), EqualTo('admin_password')])
-#     submit = SubmitField('Request Registration')
-#
-#     def validate_org_name(self, org_name):
-#         org = Organization.query.filter_by(name=org_name.data).first()
-#         if org:
-#             raise ValidationError('An organization with that name already exists.')
-#
-#     def validate_admin_username(self, admin_username):
-#         user = User.query.filter_by(username=admin_username.data).first()
-#         if user:
-#             raise ValidationError('That administrator username is already taken.')
-#
-#     def validate_admin_email(self, admin_email):
-#         user = User.query.filter_by(email=admin_email.data).first()
-#         if user:
-#             raise ValidationError('That administrator email is already in use.')
-# --- End WTForms Recommendation ---
+from .. import db, mail  # Assuming mail is initialized in __init__
+from ..models import Credentials, User, UserRole, Organization, OrgApprovalStatus, OrganizationInvitation, InvitationStatus
+from .forms import (
+    LoginForm, RegistrationForm, OrganizationRegistrationForm,
+    InviteUserForm, AcceptInvitationForm, RequestPasswordResetForm, ResetPasswordForm
+)
+# from ..utils.email import send_password_reset_email, send_invitation_email # TODO: Create email utility
+# from ..utils.tokens import generate_token, verify_token # TODO: Create token utility
+
+auth_bp = Blueprint('auth', __name__) # No need for separate template folder if using app structure
 
 
-# Assuming your blueprint setup is correct:
-# auth_bp = Blueprint('auth', __name__, template_folder='../templates/auth')
-# If templates are in 'your_app/templates/auth/', use:
-auth_bp = Blueprint('auth', __name__, template_folder='templates/auth', url_prefix='/auth')
-
+# --- Standard Login/Logout ---
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        # Redirect based on role after login check in main dashboard route
-        return redirect(url_for('main.dashboard'))
+        return redirect(url_for('main.dashboard')) # Central dashboard dispatcher
 
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
-        remember = True if request.form.get('remember') else False
+    form = LoginForm()
+    if form.validate_on_submit():
+        # Find user by username
+        creds = Credentials.query.filter_by(username=form.username.data).first()
 
-        # Basic Validation (Consider WTForms for robustness)
-        if not email or not password:
-            flash('Email and password are required.', 'warning')
-            return redirect(url_for('auth.login'))
+        # Alternatively, login by email:
+        # user_profile = User.query.filter_by(email=form.email.data).first()
+        # creds = user_profile.credentials if user_profile else None
 
-        user = User.query.filter_by(email=email).first()
+        if creds and creds.check_password(form.password.data):
+            if not creds.is_active:
+                flash('Your account is inactive. Please contact support.', 'warning')
+                return redirect(url_for('auth.login'))
 
-        # Check password and user existence
-        if not user or not user.check_password(password):
-            flash('Invalid email or password. Please try again.', 'danger')
-            return redirect(url_for('auth.login'))
-
-        # Check if account is active
-        if not user.is_active:
-             flash('Account deactivated. Please contact support.', 'warning')
-             return redirect(url_for('auth.login'))
-
-        # Check if Org user's org is approved (allow pending to login but show pending status page)
-        if user.role == UserRole.ORGANIZATION:
-            # Fetch the organization this user administers
-            org = Organization.query.filter_by(admin_user_id=user.id).first()
-            # It's possible the org doesn't exist if something went wrong, or if deleted
-            if org and org.approval_status == OrgApprovalStatus.REJECTED:
-                 flash('Your organization registration was rejected. Please contact support or register again.', 'danger')
-                 return redirect(url_for('auth.login'))
-            # PENDING or APPROVED users can proceed. The dashboard route should handle PENDING status display.
-
-        login_user(user, remember=remember)
-        flash('Login successful!', 'success')
-
-        # Redirect to the intended page or the main dashboard
-        next_page = request.args.get('next')
-        # Use url_for('main.dashboard') which should handle role-based redirection
-        return redirect(next_page or url_for('main.dashboard'))
-
-    # Render the login form for GET requests
-    return render_template('auth/login.html')
+            # Check Organization status if applicable
+            if creds.role in [UserRole.ORGANIZATION, UserRole.TEACHER, UserRole.STUDENT]:
+                user_profile = creds.user_profile # Get the associated profile
+                if user_profile and user_profile.organization:
+                    org = user_profile.organization
+                    if org.approval_status == OrgApprovalStatus.REJECTED:
+                        flash(f'The organization "{org.name}" registration was rejected.', 'danger')
+                        return redirect(url_for('auth.login'))
+                    if org.approval_status == OrgApprovalStatus.PENDING and creds.role != UserRole.ORGANIZATION:
+                        # Allow Org Admin to log in when pending, but not Teachers/Students yet
+                        flash(f'The organization "{org.name}" is still pending approval.', 'warning')
+                        return redirect(url_for('auth.login'))
+                elif creds.role != UserRole.ORGANIZATION: # Teacher/Student must have an org
+                     flash('Account error: Organization link missing. Please contact support.', 'danger')
+                     return redirect(url_for('auth.login'))
 
 
-@auth_bp.route('/register/individual', methods=['GET', 'POST'])
-def individual_register():
-    """ Handles registration for INDIVIDUAL users (role=UserRole.USER). """
-    if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard'))
+            login_user(creds, remember=form.remember_me.data)
+            # Update last login time
+            creds.last_login_at = datetime.now(timezone.utc)
+            try:
+                db.session.commit()
+            except Exception as e:
+                 current_app.logger.error(f"Error updating last_login for {creds.username}: {e}")
+                 db.session.rollback() # Rollback potential session issues
 
-    if request.method == 'POST':
-        username = request.form.get('username')
-        email = request.form.get('email')
-        password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
+            flash('Login successful!', 'success')
+            next_page = request.args.get('next')
+            # Redirect to dispatcher which handles roles
+            return redirect(next_page or url_for('main.dashboard'))
+        else:
+            flash('Invalid username or password.', 'danger')
 
-        # --- Basic Server-Side Validation (Replace/Enhance with WTForms) ---
-        error = False
-        if not username or not email or not password or not confirm_password:
-            flash('All fields are required.', 'warning')
-            error = True
-        if password != confirm_password:
-            flash('Passwords do not match.', 'danger')
-            error = True
-
-        existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
-        if existing_user:
-            flash('Username or email already exists.', 'danger')
-            error = True
-
-        if error:
-             # Re-render form, potentially passing back submitted values (safer with WTForms)
-             return render_template('individual_register.html', username=username, email=email)
-        # --- End Basic Validation ---
-
-        # Create Individual User
-        new_user = User(username=username, email=email, role=UserRole.USER) # Explicitly set role
-        new_user.set_password(password)
-
-        try:
-            db.session.add(new_user)
-            db.session.commit()
-            flash('Registration successful! Please login.', 'success')
-            return redirect(url_for('auth.login'))
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error during individual registration: {e}") # Log the actual error
-            flash('An error occurred during registration. Please try again later.', 'danger')
-            # Re-render form on database error
-            return render_template('individual_register.html', username=username, email=email)
-
-    # Render the individual registration form for GET requests
-    return render_template('individual_register.html')
-
-
-@auth_bp.route('/register/organization', methods=['GET', 'POST'])
-def organization_register():
-    """ Handles registration request for ORGANIZATIONS. """
-    if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard'))
-
-    if request.method == 'POST':
-        # Organization Details
-        org_name = request.form.get('org_name')
-        org_description = request.form.get('org_description') # Optional
-
-        # Administrator Details
-        admin_username = request.form.get('admin_username')
-        admin_email = request.form.get('admin_email')
-        admin_password = request.form.get('admin_password')
-        admin_confirm_password = request.form.get('admin_confirm_password')
-
-        # --- Basic Server-Side Validation (Replace/Enhance with WTForms) ---
-        error = False
-        required_fields = {
-            'Organization Name': org_name,
-            'Administrator Username': admin_username,
-            'Administrator Email': admin_email,
-            'Administrator Password': admin_password,
-            'Confirm Administrator Password': admin_confirm_password
-        }
-        for field_name, value in required_fields.items():
-            if not value:
-                flash(f'{field_name} is required.', 'warning')
-                error = True
-
-        if not error and admin_password != admin_confirm_password:
-            flash('Administrator passwords do not match.', 'danger')
-            error = True
-
-        # Check Uniqueness (only if basic fields are present)
-        if not error:
-            existing_user = User.query.filter((User.username == admin_username) | (User.email == admin_email)).first()
-            if existing_user:
-                flash('Administrator username or email already exists.', 'danger')
-                error = True
-
-            existing_org = Organization.query.filter(Organization.name == org_name).first()
-            if existing_org:
-                flash('An organization with this name already exists or is pending approval.', 'danger')
-                error = True
-
-        if error:
-            # Re-render form, passing back submitted values to repopulate
-            # Note: Passwords should NOT be passed back for security.
-            return render_template('organization_register.html',
-                                   org_name=org_name,
-                                   org_description=org_description,
-                                   admin_username=admin_username,
-                                   admin_email=admin_email)
-        # --- End Basic Validation ---
-
-        # Create Organization Admin User and Organization record within a transaction
-        try:
-            # 1. Create the Admin User for the Organization
-            new_admin_user = User(
-                username=admin_username,
-                email=admin_email,
-                role=UserRole.ORGANIZATION # Set the correct role
-            )
-            new_admin_user.set_password(admin_password)
-            # Don't add/commit yet, do it together with the org
-
-            # 2. Create the Organization record
-            new_org = Organization(
-                name=org_name,
-                description=org_description,
-                approval_status=OrgApprovalStatus.PENDING, # Default status
-                # Link the admin user object directly - SQLAlchemy handles the ID
-                admin_user=new_admin_user
-            )
-
-            # 3. Add both to session and commit transactionally
-            db.session.add(new_admin_user)
-            db.session.add(new_org)
-            db.session.commit()
-
-            flash('Organization registration request submitted successfully! An administrator will review it shortly.', 'success')
-            return redirect(url_for('auth.login')) # Redirect to login after successful request
-
-        except Exception as e:
-            db.session.rollback()
-            print(f"Error during organization registration: {e}") # Log the actual error
-            flash('An error occurred during registration. Please check your details and try again.', 'danger')
-            # Re-render form on database error
-            return render_template('organization_register.html',
-                                   org_name=org_name,
-                                   org_description=org_description,
-                                   admin_username=admin_username,
-                                   admin_email=admin_email)
-
-    # Render the organization registration form for GET requests
-    return render_template('auth/organization_register.html')
+    return render_template('auth/login.html', title='Login', form=form)
 
 
 @auth_bp.route('/logout')
@@ -266,5 +79,327 @@ def organization_register():
 def logout():
     logout_user()
     flash('You have been logged out.', 'info')
-    # Redirect to a public landing page or login page
-    return redirect(url_for('main.index')) # Assuming 'main.index' is your landing page
+    return redirect(url_for('main.index')) # Redirect to landing page
+
+
+# --- Registration ---
+
+@auth_bp.route('register/individual', methods=['GET', 'POST'])
+def individual_register():
+    """Handles registration for individual users (Role: USER)."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        try:
+            # Create Credentials first
+            new_credentials = Credentials(
+                username=form.username.data,
+                role=UserRole.USER # Individual user role
+            )
+            new_credentials.set_password(form.password.data)
+            db.session.add(new_credentials)
+            # Flush to get credentials ID without committing fully yet
+            db.session.flush()
+
+            # Create User Profile linked to Credentials
+            new_user_profile = User(
+                credentials_id=new_credentials.id,
+                email=form.email.data,
+                display_name=form.display_name.data or form.username.data # Default display name
+            )
+            db.session.add(new_user_profile)
+
+            db.session.commit() # Commit both records together
+            flash('Registration successful! Please login.', 'success')
+            return redirect(url_for('auth.login'))
+
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Integrity error during registration: {e}")
+            # Specific checks might have been missed by WTForms validators (race condition?)
+            if 'credentials_username_key' in str(e):
+                 form.username.errors.append("Username already exists.")
+            elif 'users_email_key' in str(e):
+                 form.email.errors.append("Email already registered.")
+            else:
+                flash('A database error occurred. Please try again.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error during registration: {e}")
+            flash('An error occurred during registration. Please try again.', 'danger')
+
+    return render_template('auth/register.html', title='Register', form=form)
+
+
+@auth_bp.route('/register/organization', methods=['GET', 'POST'])
+def organization_register():
+    """Handles registration request for an Organization and its primary Admin."""
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+
+    form = OrganizationRegistrationForm()
+    if form.validate_on_submit():
+        try:
+            # 1. Create Credentials for the Org Admin
+            org_admin_creds = Credentials(
+                username=form.admin_username.data,
+                role=UserRole.ORGANIZATION # Role for managing the org
+            )
+            org_admin_creds.set_password(form.admin_password.data)
+            db.session.add(org_admin_creds)
+            db.session.flush() # Get the ID
+
+            # 2. Create User Profile for the Org Admin
+            org_admin_profile = User(
+                credentials_id=org_admin_creds.id,
+                email=form.admin_email.data,
+                display_name=form.admin_display_name.data or form.admin_username.data
+                # Note: Organization ID is null initially, linked via Organization below
+            )
+            db.session.add(org_admin_profile)
+            db.session.flush() # Get the ID
+
+            # 3. Create the Organization, linking the admin profile
+            new_org = Organization(
+                name=form.org_name.data,
+                description=form.org_description.data,
+                website_url=form.website_url.data,
+                approval_status=OrgApprovalStatus.PENDING,
+                admin_user_id=org_admin_profile.id # Link the PROFILE ID
+            )
+            db.session.add(new_org)
+            db.session.flush() # Get the ID
+
+            # 4. IMPORTANT: Link the admin profile back to the organization
+            #    This avoids needing a separate query later if accessing org from user profile
+            org_admin_profile.organization_id = new_org.id
+
+            # 5. Commit all changes transactionally
+            db.session.commit()
+
+            flash('Organization registration request submitted! An administrator will review it shortly.', 'success')
+            # TODO: Send notification email to platform admins
+            return redirect(url_for('auth.login'))
+
+        except IntegrityError as e:
+            db.session.rollback()
+            current_app.logger.error(f"Integrity error during org registration: {e}")
+            # Handle specific constraint violations if WTForms missed them
+            if 'organizations_name_key' in str(e):
+                form.org_name.errors.append("Organization name already exists or is pending.")
+            elif 'credentials_username_key' in str(e):
+                form.admin_username.errors.append("Admin username already taken.")
+            elif 'users_email_key' in str(e):
+                 form.admin_email.errors.append("Admin email already registered.")
+            else:
+                flash('A database error occurred (duplicate data likely). Please try again.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error during organization registration: {e}")
+            flash('An unexpected error occurred. Please try again.', 'danger')
+
+    return render_template('auth/organization_register.html', title='Register Organization', form=form)
+
+
+# --- Organization Invitations ---
+
+@auth_bp.route('/accept-invitation/<token>', methods=['GET', 'POST'])
+def accept_invitation(token):
+    """Handles users accepting an invitation to join an organization."""
+    if current_user.is_authenticated:
+        flash('Please logout to accept an invitation with a different account, or contact your org admin.', 'warning')
+        return redirect(url_for('main.dashboard'))
+
+    # TODO: Implement verify_token utility function
+    # payload = verify_token(token, salt='org-invitation', max_age=current_app.config['INVITATION_TOKEN_MAX_AGE'])
+    payload = None # Placeholder
+    try:
+        # Simulate token verification - REPLACE WITH ACTUAL VERIFICATION
+        # Example payload: {'invitation_id': 1, 'email': 'invited@example.com', 'role': 'Student'}
+        # This should come from a secure token verification function
+        invitation_id = int(token.split('-')[0]) # VERY INSECURE PLACEHOLDER
+        invitation = OrganizationInvitation.query.get_or_404(invitation_id)
+        if invitation.status != InvitationStatus.PENDING:
+             flash('This invitation is no longer valid (already used or expired).', 'warning')
+             return redirect(url_for('main.index'))
+        # Check expiry (simplified)
+        if invitation.expires_at < datetime.now(timezone.utc):
+            invitation.status = InvitationStatus.EXPIRED
+            db.session.commit()
+            flash('This invitation has expired.', 'danger')
+            return redirect(url_for('main.index'))
+
+        payload = {'invitation_id': invitation.id, 'email': invitation.invitee_email, 'role': invitation.invited_as_role.value}
+    except Exception as e: # Catch token errors
+        current_app.logger.error(f"Invalid or expired invitation token: {token} - {e}")
+        flash('Invalid or expired invitation link.', 'danger')
+        return redirect(url_for('main.index'))
+
+    # If payload is valid, proceed
+    invitation = OrganizationInvitation.query.get(payload['invitation_id'])
+    if not invitation or invitation.status != InvitationStatus.PENDING:
+        flash('Invitation not found or already used.', 'warning')
+        return redirect(url_for('main.index'))
+
+    # Check if email already exists in the system
+    existing_user = User.query.filter_by(email=payload['email']).first()
+
+    form = AcceptInvitationForm(existing_user=existing_user)
+
+    if form.validate_on_submit():
+        try:
+            target_role = UserRole(payload['role']) # Convert string back to Enum
+
+            if existing_user:
+                # -- Link Existing Account --
+                # Security Check: Ensure existing user isn't already in an org or has conflicting role? (Optional)
+                if existing_user.organization_id:
+                     flash('This email is already associated with another organization.', 'danger')
+                     return render_template('auth/accept_invitation.html', title='Accept Invitation', form=form, invitation=invitation, existing_user=existing_user)
+
+                # Update user's org ID and potentially commit other profile details
+                existing_user.organization_id = invitation.organization_id
+                existing_user.enrollment_date = datetime.now(timezone.utc)
+                if form.student_code.data: # Update student code if provided
+                      existing_user.student_code = form.student_code.data
+                # Assign the invited role (IMPORTANT: Overwrites previous role if they were USER)
+                if existing_user.credentials.role == UserRole.USER: # Only upgrade from individual user
+                    existing_user.credentials.role = target_role
+                elif existing_user.credentials.role != target_role:
+                     flash(f'Account role mismatch. Invitation is for {target_role.value}, account has role {existing_user.credentials.role.value}.', 'warning')
+                     return render_template('auth/accept_invitation.html', title='Accept Invitation', form=form, invitation=invitation, existing_user=existing_user)
+
+                accepted_user_id = existing_user.id
+
+            else:
+                # -- Create New Account --
+                # 1. Create Credentials
+                new_credentials = Credentials(
+                    username=form.username.data,
+                    role=target_role
+                )
+                new_credentials.set_password(form.password.data)
+                db.session.add(new_credentials)
+                db.session.flush()
+
+                # 2. Create User Profile
+                new_user_profile = User(
+                    credentials_id=new_credentials.id,
+                    email=invitation.invitee_email, # Use the invited email
+                    display_name=form.display_name.data or form.username.data,
+                    organization_id=invitation.organization_id,
+                    student_code=form.student_code.data,
+                    enrollment_date=datetime.now(timezone.utc)
+                )
+                db.session.add(new_user_profile)
+                db.session.flush()
+                accepted_user_id = new_user_profile.id
+
+            # Update invitation status
+            invitation.status = InvitationStatus.ACCEPTED
+            invitation.accepted_at = datetime.now(timezone.utc)
+            invitation.accepted_by_user_id = accepted_user_id
+
+            db.session.commit()
+
+            flash(f'Invitation accepted! You are now part of {invitation.organization.name}. Please login.', 'success')
+            return redirect(url_for('auth.login'))
+
+        except IntegrityError as e:
+             db.session.rollback()
+             current_app.logger.error(f"Integrity error accepting invitation: {e}")
+             if not existing_user and 'credentials_username_key' in str(e):
+                 form.username.errors.append("Username already exists.")
+             else:
+                 flash('A database error occurred. Please try again.', 'danger')
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error accepting invitation: {e}")
+            flash('An unexpected error occurred. Please try again.', 'danger')
+
+    # Prepare context for template
+    org_name = Organization.query.get(invitation.organization_id).name or "the organization"
+
+    return render_template('auth/accept_invitation.html',
+                           title='Accept Invitation',
+                           form=form,
+                           invitation=invitation,
+                           existing_user=existing_user,
+                           invited_role=UserRole(payload['role']),
+                           org_name=org_name,
+                           token=token)
+
+
+# --- Password Reset ---
+
+@auth_bp.route('/reset_password_request', methods=['GET', 'POST'])
+def reset_password_request():
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+    form = RequestPasswordResetForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user:
+            # Check if credentials exist and are active
+            if not user.credentials:
+                 flash('Credentials not found for this email.', 'warning')
+            elif not user.credentials.is_active:
+                 flash('Account associated with this email is inactive.', 'warning')
+            else:
+                 # TODO: Generate secure token (e.g., using itsdangerous)
+                 # TODO: Send password reset email with token link
+                 # send_password_reset_email(user) # Pass user object
+                 flash('Check your email for instructions to reset your password.', 'info')
+                 # Always redirect to prevent email enumeration where possible
+                 return redirect(url_for('auth.login'))
+        else:
+            # Still show success message even if user not found to prevent enumeration
+            flash('If an account with that email exists, you will receive reset instructions.', 'info')
+            return redirect(url_for('auth.login'))
+
+    return render_template('auth/reset_password_request.html',
+                           title='Reset Password', form=form)
+
+
+@auth_bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    if current_user.is_authenticated:
+        return redirect(url_for('main.dashboard'))
+
+    # TODO: Verify the token securely, get credentials ID
+    # creds_id = verify_token(token, salt='password-reset', max_age=3600) # Example: 1 hour expiry
+    # if not creds_id:
+    #     flash('The password reset link is invalid or has expired.', 'warning')
+    #     return redirect(url_for('auth.reset_password_request'))
+    # creds = Credentials.query.get(creds_id)
+
+    creds = None # Placeholder - Replace with actual token verification logic
+    # --- TEMPORARY FOR DEMO --- REMOVE THIS ---
+    try:
+        temp_creds_id = int(token)
+        creds = Credentials.query.get(temp_creds_id)
+        if not creds : raise ValueError("User not found")
+    except:
+         flash('Invalid or expired password reset token.', 'warning')
+         return redirect(url_for('auth.reset_password_request'))
+    # --- END TEMPORARY ---
+
+    if not creds:
+        flash('Invalid user for password reset.', 'warning')
+        return redirect(url_for('auth.reset_password_request'))
+
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        creds.set_password(form.password.data)
+        try:
+            db.session.commit()
+            flash('Your password has been reset successfully. Please login.', 'success')
+            return redirect(url_for('auth.login'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error saving reset password for {creds.username}: {e}")
+            flash('An error occurred while resetting the password.', 'danger')
+
+    return render_template('auth/reset_password.html', title='Reset Password', form=form)

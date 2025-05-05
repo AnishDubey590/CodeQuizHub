@@ -1,0 +1,36 @@
+{# /your_app/templates/teacher/results_overview.html #}
+{% extends "base.html" %}
+
+{% block title %}Student Results{% endblock %}
+
+{% block content %}
+ <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Student Results Overview</h1>
+</div>
+
+<p>Select a quiz to view detailed results and analysis:</p>
+
+{# TODO: Use a proper form or select dropdown for better UX #}
+{% if quizzes %}
+<div class="list-group">
+    {% for quiz in quizzes %}
+        {# TODO: Link to a route like /teacher/results/quiz/<quiz_id> #}
+        <a href="#" class="list-group-item list-group-item-action">
+            {{ quiz.title }}
+            <small class="text-muted d-block">
+                Created: {{ quiz.created_at.strftime('%Y-%m-%d') }} |
+                Status: {{ quiz.status.value }}
+            </small>
+         </a>
+    {% endfor %}
+</div>
+{% else %}
+    <p>No relevant quizzes found to display results for.</p>
+{% endif %}
+
+<hr>
+{# Or potentially add functionality to view results per-student across quizzes #}
+{# <h3>View by Student</h3> ... #}
+
+
+{% endblock %}

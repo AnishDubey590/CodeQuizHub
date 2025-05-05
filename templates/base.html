@@ -1,95 +1,135 @@
+{# /your_app/templates/base.html #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}CodeQuiz Hub{% endblock %}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#4F46E5',
-                        secondary: '#6D28D9'
-                    },
-                    animation: {
-                        fadeIn: "fadeIn 1s ease-in-out",
-                        slideIn: "slideIn 1.5s ease-in-out",
-                        pageLoad: "pageLoad 2s ease-in-out"
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: 0 },
-                            '100%': { opacity: 1 }
-                        },
-                        slideIn: {
-                            '0%': { opacity: 0, transform: 'translateX(-50px)' },
-                            '100%': { opacity: 1, transform: 'translateX(0)' }
-                        },
-                        pageLoad: {
-                            '0%': { opacity: 1, transform: 'scale(1)' },
-                            '100%': { opacity: 1, transform: 'scale(1)' }
-                        }
-                    }
-                }
-            }
-        };
-    </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-    <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            gsap.from("body", { opacity: 0, scale: 1, duration: 1.5, ease: "power2.out" });
-            gsap.from(".fade-in", { opacity: 0, y:20, duration: 1, stagger: 0, ease: "power2.out" });
-            gsap.from(".slide-in", { opacity: 0, x: -100, duration: 1.5, stagger: 0, ease: "power2.out" });
-        });
-    </script>
-</head>
-<body class="bg-gray-100 text-gray-900 min-h-screen flex flex-col">
+    <!-- CSRF Token for AJAX Requests (if needed) -->
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <!-- Navbar -->
-    <nav class="bg-white shadow-md py-4 px-6 flex justify-between items-center fixed w-full top-0 z-50 backdrop-blur-lg bg-opacity-90 fade-in">
-        <h1 class="text-2xl font-bold text-primary">CodeQuiz Hub</h1>
-        <div class="space-x-6">
-            <a href="#features" class="text-gray-700 hover:text-primary transition-all duration-300">Features</a>
-            <a href="#how-it-works" class="text-gray-700 hover:text-primary transition-all duration-300">How It Works</a>
-            <a href="#contact" class="text-gray-700 hover:text-primary transition-all duration-300">Contact</a>
-            <a href="{{ url_for('auth.login') }}" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-secondary transition-all duration-500 ease-in-out transform hover:scale-105">Login</a>
+    <title>{% block title %}CodeQuiz Hub{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+
+    <!-- Font Awesome (Optional Icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css" integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"> {% block head_extra %}{% endblock %}
+
+</head>
+<body class="d-flex flex-column min-vh-100"> {# Sticky Footer Setup #}
+
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">
+                <i class="fas fa-laptop-code"></i> CodeQuiz Hub
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+                    </li>
+                    {# Add role-specific nav items if needed, check current_user.role #}
+                    {% if current_user.role == UserRole.ADMIN %}
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.view_organizations') }}">Organizations</a></li>
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('admin.view_users') }}">Users</a></li>
+                    {% elif current_user.role == UserRole.ORGANIZATION %}
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('organization.manage_members') }}">Members</a></li>
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('organization.manage_quizzes') }}">Quizzes</a></li>
+                    {% elif current_user.role == UserRole.TEACHER %}
+                         {# Teacher specific links #}
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('teacher.manage_quizzes') }}">My Quizzes</a></li>
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('teacher.view_assignments') }}">Assignments</a></li>
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('teacher.view_student_results') }}">Student Results</a></li>
+                     {% elif current_user.role == UserRole.STUDENT %}
+                         {# Student specific links #}
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('student.my_assignments') }}">My Assignments</a></li>
+                         <li class="nav-item"><a class="nav-link" href="{{ url_for('student.my_results') }}">My Results</a></li>
+                     {% elif current_user.role == UserRole.USER %}
+                          {# Individual user specific links - e.g., Friends #}
+                          <li class="nav-item"><a class="nav-link" href="{{ url_for('user.public_quizzes') }}">Public Quizzes</a></li>
+                          <li class="nav-item"><a class="nav-link" href="{{ url_for('user.friends_list') }}">Friends</a></li>
+                     {% endif %}
+
+                    {% else %}
+                    {# Public Links if needed #}
+                    <li class="nav-item">
+                        <a class="nav-link" href="#">About</a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    {% if current_user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                         <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                              <i class="fas fa-user-circle"></i> {{ current_user.username }} ({{ current_user.role.value }})
+                         </a>
+                         <ul class="dropdown-menu dropdown-menu-end">
+                              <li><a class="dropdown-item" href="{{ url_for('main.view_profile') }}"><i class="fas fa-user me-2"></i>Profile</a></li>
+                              {# Add link to settings if needed #}
+                              {# <li><a class="dropdown-item" href="#"><i class="fas fa-cog me-2"></i>Settings</a></li> #}
+                              <li><hr class="dropdown-divider"></li>
+                              <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}"><i class="fas fa-sign-out-alt me-2"></i>Logout</a></li>
+                         </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
+                    </li>
+                    <li class="nav-item">
+                         <a class="nav-link" href="{{ url_for('auth.register') }}">Register User</a>
+                    </li>
+                     <li class="nav-item">
+                         <a class="nav-link" href="{{ url_for('auth.organization_register') }}">Register Organization</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
     </nav>
 
-    <main class="flex-grow">
-        <div class="container mx-auto px-4 mt-4">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                <div class="space-y-4">
-                  {% for category, message in messages %}
-                    <div class="p-4 rounded-lg 
-                      {% if category == 'success' %}
-                        bg-green-100 text-green-800
-                      {% elif category == 'error' %}
-                        bg-red-100 text-red-800
-                      {% elif category == 'warning' %}
-                        bg-yellow-100 text-yellow-800
-                      {% else %}
-                        bg-blue-100 text-blue-800
-                      {% endif %}
-                    ">
-                      {{ message }}
+    <!-- Main Content Area -->
+    <main class="container mt-4 flex-grow-1"> {# flex-grow-1 for sticky footer #}
+        {# Flash Messages #}
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category or 'info' }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                     </div>
-                  {% endfor %}
-                </div>
-              {% endif %}
-            {% endwith %}
-          </div>
-          
-          {% block content %}{% endblock %}
-          
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        {% block content %}
+        <!-- Default content goes here if not overridden -->
+        {% endblock %}
     </main>
 
     <!-- Footer -->
-    <footer class="bg-gray-900 text-white text-center py-6 slide-in">
-        <p>&copy; 2025 CodeQuiz Hub. All rights reserved.</p>
+    <footer class="footer mt-auto py-3 bg-light border-top">
+        <div class="container text-center">
+            <span class="text-muted">&copy; {{ now().year }} CodeQuiz Hub. All rights reserved.</span>
+        </div>
     </footer>
+
+    <!-- Bootstrap 5 Bundle JS (includes Popper) -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+
+    <!-- TODO: Add custom JS file link -->
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+
+    {% block scripts %}
+    <!-- Page-specific scripts can be added here -->
+    {% endblock %}
+
 </body>
 </html>

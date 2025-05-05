@@ -1,0 +1,25 @@
+# /.gitignore
+instance/
+*.sqlite
+*.sqlite3
+*.db
+*.pyc
+__pycache__/
+.venv/
+venv/
+env/
+.env
+*.log*
+dist/
+build/
+*.egg-info/
+htmlcov/
+.pytest_cache/
+.vscode/
+*.local
+*.swp
+
+# If files were accidentally committed before, run:
+# git rm -r --cached instance/
+# git rm --cached .env
+# git commit -m "Stop tracking instance folder and .env"

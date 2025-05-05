@@ -1,0 +1,44 @@
+{# /your_app/templates/teacher/create_edit_quiz.html #}
+{% extends "base.html" %}
+{# TODO: Add form rendering logic using _formhelpers #}
+{# {% from "_formhelpers.html" import render_field %} #}
+
+{% block title %}{{ 'Edit Quiz' if quiz else 'Create Quiz' }}{% endblock %}
+
+{% block content %}
+<h1>{{ 'Edit Quiz' if quiz else 'Create Quiz' }}</h1>
+<p class="text-muted">For organization: {{ org.name }}</p>
+
+{# TODO: Implement the WTForm (QuizForm) #}
+<form method="POST" action="{{ url_for('teacher.create_quiz') if not quiz else url_for('teacher.edit_quiz', quiz_id=quiz.id) }}" novalidate>
+    {# {{ form.hidden_tag() }} #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"> {# Manual CSRF if no form object #}
+
+    <div class="mb-3">
+        <label for="title" class="form-label">Quiz Title</label>
+        <input type="text" id="title" name="title" class="form-control" required value="{{ quiz.title if quiz else '' }}">
+    </div>
+    <div class="mb-3">
+        <label for="description" class="form-label">Description</label>
+        <textarea id="description" name="description" class="form-control" rows="3">{{ quiz.description if quiz else '' }}</textarea>
+    </div>
+    <div class="mb-3">
+        <label for="duration_minutes" class="form-label">Duration (Minutes)</label>
+        <input type="number" id="duration_minutes" name="duration_minutes" class="form-control" required value="{{ quiz.duration_minutes if quiz else 60 }}" min="1">
+    </div>
+
+    {# TODO: Add fields for start/end time, status, strategy, max attempts, etc. #}
+    {# TODO: Add field to select questions (MultiCheckboxField or similar) #}
+    {# Example: {{ render_field(form.questions) }} #}
+     <div class="mb-3 border p-3 rounded">
+        <h5>Select Questions</h5>
+        <p class="text-warning">Question selection UI needs implementation.</p>
+        {# Placeholder - Needs dynamic population and selection widget #}
+     </div>
+
+
+    <button type="submit" class="btn btn-primary">{{ 'Update Quiz' if quiz else 'Create Quiz' }}</button>
+    <a href="{{ url_for('teacher.manage_quizzes') }}" class="btn btn-secondary">Cancel</a>
+</form>
+
+{% endblock %}

@@ -1,0 +1,77 @@
+{# /your_app/templates/teacher/create_edit_question.html #}
+{% extends "base.html" %}
+{# {% from "_formhelpers.html" import render_field %} #}
+
+{% block title %}{{ 'Edit Question' if question else 'Create Question' }}{% endblock %}
+
+{% block content %}
+<h1>{{ 'Edit Question' if question else 'Create Question' }}</h1>
+ <p class="text-muted">For organization: {{ org.name }}</p>
+
+<form method="POST" action="{{ url_for('teacher.create_question') if not question else url_for('teacher.edit_question', question_id=question.id) }}" novalidate>
+    {# {{ form.hidden_tag() }} #}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="alert alert-warning">
+        <strong>Note:</strong> This is a basic structure. Creating/editing questions requires dynamic fields based on the selected 'Question Type' (e.g., showing option fields for MCQ, test case fields for Coding). This needs JavaScript implementation or more complex Flask form handling.
+    </div>
+
+     <div class="mb-3">
+        <label for="question_type" class="form-label">Question Type</label>
+        {# TODO: Populate dynamically from QuestionType Enum #}
+        <select id="question_type" name="question_type" class="form-select" required>
+            <option value="MCQ" {% if question and question.question_type == QuestionType.MCQ %}selected{% endif %}>Multiple Choice</option>
+            <option value="CODING" {% if question and question.question_type == QuestionType.CODING %}selected{% endif %}>Coding</option>
+            <option value="FILL_IN_BLANKS" {% if question and question.question_type == QuestionType.FILL_IN_BLANKS %}selected{% endif %}>Fill in the Blanks</option>
+             <option value="SHORT_ANSWER" {% if question and question.question_type == QuestionType.SHORT_ANSWER %}selected{% endif %}>Short Answer</option>
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label for="question_text" class="form-label">Question Text</label>
+        <textarea id="question_text" name="question_text" class="form-control" rows="5" required>{{ question.question_text if question else '' }}</textarea>
+    </div>
+
+     <div class="mb-3">
+        <label for="points" class="form-label">Points</label>
+        <input type="number" step="0.5" id="points" name="points" class="form-control" value="{{ question.points if question else 1.0 }}" required>
+    </div>
+
+    {# --- Dynamic Section (Requires JS) --- #}
+    <div id="question-details">
+        <p class="text-muted">Fields for options (MCQ), test cases (Coding), or correct answer (Fill-in/Short) would appear here based on type selection.</p>
+        {# Example for MCQ Options (hidden by default, shown via JS) #}
+        <div id="mcq-options" style="display: none;">
+             <h5>MCQ Options</h5>
+             {# TODO: Add fields to dynamically add/edit options #}
+        </div>
+        {# Example for Coding Test Cases #}
+         <div id="coding-testcases" style="display: none;">
+             <h5>Coding Test Cases</h5>
+             {# TODO: Add fields to dynamically add/edit test cases #}
+        </div>
+         <div id="text-answer" style="display: none;">
+             <div class="mb-3">
+                 <label for="correct_answer_text" class="form-label">Correct Answer (for Fill-in/Short)</label>
+                 <input type="text" id="correct_answer_text" name="correct_answer_text" class="form-control" value="{{ question.correct_answer_text if question else '' }}">
+                 <small class="form-text text-muted">For multiple fill-in-blanks OR multiple valid short answers, separate with a pipe (|).</small>
+             </div>
+        </div>
+    </div>
+     {# --- End Dynamic Section --- #}
+
+    <div class="mb-3">
+        <label for="explanation" class="form-label">Explanation (Optional)</label>
+        <textarea id="explanation" name="explanation" class="form-control" rows="3">{{ question.explanation if question else '' }}</textarea>
+    </div>
+
+
+    <button type="submit" class="btn btn-primary">{{ 'Update Question' if question else 'Create Question' }}</button>
+     <a href="{{ url_for('teacher.manage_questions') }}" class="btn btn-secondary">Cancel</a>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+{# TODO: Add JS to show/hide detail sections based on question_type dropdown #}
+{% endblock %}

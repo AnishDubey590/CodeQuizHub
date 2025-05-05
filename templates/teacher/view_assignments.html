@@ -1,0 +1,46 @@
+{# /your_app/templates/teacher/view_assignments.html #}
+{% extends "base.html" %}
+
+{% block title %}My Assignments{% endblock %}
+
+{% block content %}
+ <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">Quizzes Assigned By Me</h1>
+     {# Optional: Button to go back to quiz list or assign more #}
+</div>
+
+{% if assignments %}
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+         <thead>
+            <tr>
+                <th>Quiz Title</th>
+                <th>Student</th>
+                <th>Assigned On</th>
+                <th>Due Date</th>
+                <th>Status (Student's Attempt)</th> {# Placeholder status #}
+                <th>Actions</th>
+            </tr>
+        </thead>
+         <tbody>
+             {% for assignment in assignments %}
+             <tr>
+                 <td><a href="#">{{ assignment.quiz.title }}</a></td> {# TODO: Link to quiz view? #}
+                 <td>{{ assignment.student.display_name or assignment.student.credentials.username }}</td>
+                 <td>{{ assignment.assigned_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                 <td>{{ assignment.due_date.strftime('%Y-%m-%d %H:%M') if assignment.due_date else 'N/A' }}</td>
+                 <td>{# TODO: Display student attempt status for this assignment #} Status N/A</td>
+                 <td>
+                     <a href="#" class="btn btn-sm btn-info" title="View Progress/Results"><i class="fas fa-poll"></i> View Details</a> {# TODO: Link #}
+                     {# Add button to revoke assignment? #}
+                 </td>
+             </tr>
+             {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+    <p>You have not assigned any quizzes yet.</p>
+{% endif %}
+ {# TODO: Add Pagination #}
+{% endblock %}
