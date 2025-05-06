@@ -1,76 +1,86 @@
+{# File: CodeQuizHub/templates/admin/dashboard.html #}
 {% extends "base.html" %}
-    {% block title %}Admin Dashboard{% endblock %}
-    {% block content %}
-    <h1>Admin Dashboard</h1>
-    <p>Welcome, {{ current_user.username }}!</p>
 
-    <h2>Pending Organization Approvals</h2>
-    {% if pending_orgs %}
-        <ul class="list-group">
-            {% for org in pending_orgs %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                {{ org.name }} (Requested: {{ org.requested_at.strftime('%Y-%m-%d') }})
-                <span>
-                     <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" style="display: inline;">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <button type="submit" class="btn btn-success btn-sm">Approve</button>
-                     </form>
-                     <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" style="display: inline;">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                          <button type="submit" class="btn btn-danger btn-sm">Reject</button>
-                     </form>
-                </span>
-            </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No organizations pending approval.</p>
-    {% endif %}
+{% block title %}{{ title }}{% endblock %}
 
-    <h2>Recent Users</h2>
-    {# TODO: Display recent users #}
-
-    {# TODO: Links to other admin sections #}
-    {% endblock %}
-    ```
-*   **`/your_app/templates/organization/dashboard.html`**:
-    ```html
-    {% extends "base.html" %}
-    {% block title %}{{ org.name }} Dashboard{% endblock %}
-    {% block content %}
-    <h1>{{ org.name }} <span class="badge bg-secondary">{{ org.approval_status.value|capitalize }}</span></h1>
-    <p>Welcome, {{ current_user.user_profile.display_name or current_user.username }} (Organization Admin)!</p>
-     {% if org.approval_status == OrgApprovalStatus.PENDING %}
-          <div class="alert alert-warning">Your organization registration is pending administrator approval. Some features may be limited.</div>
-     {% endif %}
-    <div class="row">
-         <div class="col-md-4">
-              <div class="card">
-                   <div class="card-body">
-                        <h5 class="card-title">Members</h5>
-                        <p class="card-text">{{ teacher_count }} Teachers, {{ student_count }} Students</p>
-                        <a href="{{ url_for('organization.manage_members') }}" class="btn btn-primary">Manage Members</a>
-                   </div>
-              </div>
-         </div>
-         <div class="col-md-4">
-              <div class="card">
-                   <div class="card-body">
-                        <h5 class="card-title">Quizzes</h5>
-                        <p class="card-text">{{ quiz_count }} quizzes created.</p>
-                        <a href="{{ url_for('organization.manage_quizzes') }}" class="btn btn-primary">Manage Quizzes</a>
-                   </div>
-              </div>
-         </div>
-          <div class="col-md-4">
-              <div class="card">
-                   <div class="card-body">
-                        <h5 class="card-title">Invitations</h5>
-                        <p class="card-text">{{ pending_invites }} pending invitations.</p>
-                        <a href="{{ url_for('organization.view_invitations') }}" class="btn btn-primary">View Invitations</a>
-                   </div>
-              </div>
-         </div>
-         {# Add more dashboard widgets as needed #}
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>{{ title }}</h1>
+        <span class="text-muted">Welcome, {{ current_user.username }}!</span>
     </div>
-    {% endblock %}
+
+    {# Display Flash Messages - Already in base.html, but can be here too if base changes #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="row">
+        <div class="col-md-8">
+            <h4>Pending Organization Approvals</h4>
+            {% if pending_orgs %}
+                <ul class="list-group">
+                    {% for org in pending_orgs %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ org.name }}</strong><br>
+                            <small class="text-muted">Requested: {{ org.requested_at.strftime('%Y-%m-%d %H:%M') if org.requested_at else 'N/A' }}</small>
+                            {# Add Org Admin User info if available: org.admin_user.email #}
+                        </div>
+                        <div>
+                            {# Ensure these routes exist and your forms are set up for POST #}
+                            <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" class="d-inline">
+                                {{ csrf_token() }} {# If your POST routes are CSRF protected, which they should be #}
+                                <button type="submit" class="btn btn-success btn-sm me-1">Approve</button>
+                            </form>
+                            <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline">
+                                {{ csrf_token() }}
+                                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
+                            </form>
+                            {# Add a link to view org details if you have such a route #}
+                            <!-- <a href="{{ url_for('admin.view_organization_details', org_id=org.id) }}" class="btn btn-info btn-sm ms-1">Details</a> -->
+                        </div>
+                    </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted">No organizations are currently pending approval.</p>
+            {% endif %}
+            <div class="mt-3">
+                 <a href="{{ url_for('admin.view_organizations') }}" class="btn btn-outline-primary">View All Organizations</a>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <h4>Site Management</h4>
+            <div class="list-group">
+                <a href="{{ url_for('admin.view_users') }}" class="list-group-item list-group-item-action">Manage Users</a>
+                <!-- Add links to other admin sections like site settings, content management etc. -->
+                <!-- <a href="#" class="list-group-item list-group-item-action disabled">Site Settings</a> -->
+            </div>
+
+            <h4 class="mt-4">Recent User Registrations</h4>
+            {% if recent_users_creds %}
+                <ul class="list-group">
+                    {% for creds in recent_users_creds %}
+                        <li class="list-group-item">
+                            {{ creds.username }} ({{ creds.role.value }})
+                            {% if creds.user and creds.user.email %}- {{ creds.user.email }}{% endif %}<br>
+                            <small class="text-muted">Joined: {{ creds.created_at.strftime('%Y-%m-%d %H:%M') if creds.created_at else 'N/A' }}</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="text-muted">No recent user registrations.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

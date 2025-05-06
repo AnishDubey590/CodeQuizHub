@@ -1,52 +1,62 @@
-{# /your_app/templates/auth/organization_register.html #}
 {% extends "base.html" %}
 {% from "_formhelpers.html" import render_field %}
 
-{% block title %}Register Organization - CodeQuiz Hub{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
-    <div class="col-md-8 col-lg-7">
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h2 class="card-title text-center mb-4">Register Your Organization</h2>
-                <p class="text-center text-muted mb-4">
-                    Submit your organization details and create the primary administrator account.
-                    Your registration will be reviewed by a platform admin before activation.
-                </p>
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7"> {# Adjusted column width #}
+        <div class="card">
+            <div class="card-header">
+                <h2>{{ title }}</h2>
+                <p class="text-muted">Register your organization and an administrator account.</p>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="" novalidate>
+                    {{ form.hidden_tag() }}
 
-                <form method="POST" action="{{ url_for('auth.organization_register') }}" novalidate>
-                     {{ form.hidden_tag() }} {# CSRF Token #}
+                    <h5 class="mt-3 mb-3">Organization Details</h5>
+                    {% call render_field(form.org_name) %}
+                        {{ form.org_name(class="form-control" + (" is-invalid" if form.org_name.errors else ""), placeholder="e.g., Example University, Tech Corp Inc.", autocomplete="organization") }}
+                    {% endcall %}
 
-                    <h5 class="mb-3">Organization Details</h5>
-                    <hr class="mb-3 hr-grey">
+                    {# Add other organization-specific fields from your OrganizationRegistrationForm here #}
+                    {# Example:
+                    {% call render_field(form.org_website) %}
+                        {{ form.org_website(class="form-control" + (" is-invalid" if form.org_website.errors else ""), placeholder="https://example.com", type="url") }}
+                    {% endcall %}
+                    #}
 
-                    {{ render_field(form.org_name, class="form-control", placeholder="e.g., Example University, Tech Corp Inc.") }}
-                    {{ render_field(form.org_description, class="form-control", rows=3, placeholder="Briefly describe your organization") }}
-                    {{ render_field(form.website_url, type="url", class="form-control", placeholder="https://www.example.com (Optional)") }}
+                    <hr class="my-4">
+                    <h5 class="mb-3">Administrator Account Details</h5>
 
+                    {% call render_field(form.admin_username) %}
+                        {{ form.admin_username(class="form-control" + (" is-invalid" if form.admin_username.errors else ""), autocomplete="username", placeholder="Admin username") }}
+                    {% endcall %}
 
-                    <h5 class="mt-4 mb-3">Administrator Account Details</h5>
-                    <hr class="mb-3 hr-grey">
-                    <p class="text-muted small mb-3">This user will manage your organization's account on CodeQuiz Hub.</p>
+                    {% call render_field(form.admin_email) %}
+                        {{ form.admin_email(class="form-control" + (" is-invalid" if form.admin_email.errors else ""), autocomplete="email", placeholder="Admin email address") }}
+                    {% endcall %}
 
-                    {{ render_field(form.admin_username, class="form-control", autocomplete="username", placeholder="Choose a unique admin username") }}
-                    {{ render_field(form.admin_email, type="email", class="form-control", autocomplete="email", placeholder="admin.email@yourorg.com") }}
-                    {{ render_field(form.admin_display_name, class="form-control", autocomplete="name", placeholder="Administrator's full name (Optional)") }}
-                    {{ render_field(form.admin_password, type="password", class="form-control", autocomplete="new-password", placeholder="Choose a strong admin password (min 8 chars)") }}
-                    {{ render_field(form.admin_confirm_password, type="password", class="form-control", autocomplete="new-password", placeholder="Confirm admin password") }}
+                    {% call render_field(form.admin_password) %}
+                        {{ form.admin_password(class="form-control" + (" is-invalid" if form.admin_password.errors else ""), placeholder="Admin password") }}
+                    {% endcall %}
 
+                    {% call render_field(form.admin_confirm_password) %}
+                        {{ form.admin_confirm_password(class="form-control" + (" is-invalid" if form.admin_confirm_password.errors else ""), placeholder="Confirm admin password") }}
+                    {% endcall %}
 
-                    <div class="d-grid mt-4">
-                         {{ form.submit(class="btn btn-info btn-lg text-dark") }}
-                    </div>
+                    {{ form.submit(class="btn btn-primary w-100 mt-4") }}
                 </form>
-
-                 <hr class="mt-4">
-                 <div class="text-center small mt-3">
-                     <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
-                     <p>Registering as an individual user? <a href="{{ url_for('auth.register') }}">Click here</a></p>
-                </div>
+            </div>
+            <div class="card-footer text-center">
+                <small class="text-muted">
+                    Already have an account? <a href="{{ url_for('auth.login') }}">Sign In</a>
+                </small>
+                <br>
+                <small class="text-muted">
+                    Registering as an individual user? <a href="{{ url_for('auth.individual_register') }}">Click here</a>.
+                </small>
             </div>
         </div>
     </div>
@@ -55,6 +65,7 @@
     .hr-grey { border-top: 1px solid #ccc; }
 </style>
 {% endblock %}
+
 {% block scripts %}
  {{ super() }}
 {# Include validation script similar to login page if needed #}

@@ -2,8 +2,7 @@
 from flask import Blueprint, render_template, redirect, url_for, abort
 from flask_login import current_user, login_required
 from ..models import UserRole
-
-main_bp = Blueprint('main', __name__)
+from . import main_bp 
 
 @main_bp.route('/')
 @main_bp.route('/index')
@@ -12,7 +11,7 @@ def index():
     if current_user.is_authenticated:
         # If logged in, redirect to role-specific dashboard immediately
         return redirect(url_for('main.dashboard'))
-    return render_template('main/index.html', title='Welcome')
+    return render_template('main/dashboard.html', title='Welcome')
 
 @main_bp.route('/dashboard')
 @login_required

@@ -7,6 +7,8 @@ from flask_login import LoginManager
 from flask_wtf.csrf import CSRFProtect
 from flask_mail import Mail # Import Flask-Mail
 from .app_config import config_by_name # Note the leading dot
+from datetime import datetime # <--- Make sure this import is at the top of the file
+
 
 db = SQLAlchemy()
 migrate = Migrate()
@@ -125,7 +127,9 @@ def create_app(config_name=None):
     login_manager.init_app(app)
     csrf.init_app(app)
     mail.init_app(app)
-
+    @app.context_processor
+    def inject_now():
+        return {'now': datetime.utcnow}
     # Register blueprints
     from .auth import auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')

@@ -15,7 +15,7 @@
       <div class="d-grid gap-2 d-sm-flex justify-content-sm-center">
         {% if not current_user.is_authenticated %}
         <a href="{{ url_for('auth.login') }}" type="button" class="btn btn-primary btn-lg px-4 gap-3">Login</a>
-        <a href="{{ url_for('auth.register') }}" type="button" class="btn btn-outline-secondary btn-lg px-4">Register</a>
+        <a href="{{ url_for('auth.individual_register') }}" type="button" class="btn btn-outline-secondary btn-lg px-4">Register</a>
         {% else %}
         <a href="{{ url_for('main.dashboard') }}" type="button" class="btn btn-primary btn-lg px-4 gap-3">Go to Dashboard</a>
         {% endif %}

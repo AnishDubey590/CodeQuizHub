@@ -1,0 +1,46 @@
+{# File: CodeQuizHub/templates/_formhelpers.html #}
+{% macro render_field_wrapper(field, label_visible=true) %}
+  {# This macro only provides the wrapper, label, and error structure #}
+  {# It expects YOU to render the actual field input inside a 'caller' block #}
+  <div class="form-group mb-3">
+    {% if label_visible and field.label %}
+      {{ field.label(class="form-label") }}
+    {% endif %}
+
+    {{ caller() }} {# This is where the field input will be rendered from the calling template #}
+
+    {% if field.errors %}
+      <div class="invalid-feedback d-block">
+        {% for error in field.errors %}
+          <span>{{ error }}</span><br>
+        {% endfor %}
+      </div>
+    {% endif %}
+    {% if field.description %}
+        <small class="form-text text-muted">{{ field.description }}</small>
+    {% endif %}
+  </div>
+{% endmacro %}
+{% macro render_field(field, label_visible=true) %}
+  <div class="form-group mb-3">  {# Basic Bootstrap wrapper #}
+    {% if label_visible and field.label %}
+      {{ field.label(class="form-label") }}
+    {% endif %}
+
+    {{ caller() }} {# This is where the field input from the calling template will be rendered #}
+
+    {# Display errors #}
+    {% if field.errors %}
+      <div class="invalid-feedback d-block"> {# 'd-block' to ensure it's visible #}
+        {% for error in field.errors %}
+          <span>{{ error }}</span><br>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# Display field description if it exists #}
+    {% if field.description %}
+        <small class="form-text text-muted">{{ field.description }}</small>
+    {% endif %}
+  </div>
+{% endmacro %}

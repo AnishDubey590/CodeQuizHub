@@ -1,35 +1,41 @@
 {# /your_app/templates/auth/register.html #}
 {% extends "base.html" %}
-{% from "_formhelpers.html" import render_field %}
+{% from "_formhelpers.html" import render_field %} {# This line should work if the macro name matches #}
 
-{% block title %}Register User - CodeQuiz Hub{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center mt-5">
+<div class="row justify-content-center">
     <div class="col-md-8 col-lg-6">
-        <div class="card shadow-sm">
-            <div class="card-body p-4">
-                <h2 class="card-title text-center mb-4">Register Individual Account</h2>
-                <p class="text-center text-muted mb-4">Create a free account to take public quizzes, compete with friends, and track your progress.</p>
+        <div class="card">
+            <div class="card-header"><h2>{{ title }}</h2></div>
+            <div class="card-body">
+                <form method="POST" action="" novalidate>
+                    {{ form.hidden_tag() }}
 
-                <form method="POST" action="{{ url_for('auth.register') }}" novalidate>
-                    {{ form.hidden_tag() }} {# CSRF Token #}
+                    {% call render_field(form.username) %}
+                        {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), autocomplete="username", placeholder="Choose a username") }}
+                    {% endcall %}
 
-                    {{ render_field(form.username, class="form-control", autocomplete="username", placeholder="Choose a username") }}
-                    {{ render_field(form.email, type="email", class="form-control", autocomplete="email", placeholder="your.email@example.com") }}
-                    {{ render_field(form.display_name, class="form-control", autocomplete="name", placeholder="How should we call you? (Optional)") }}
-                    {{ render_field(form.password, type="password", class="form-control", autocomplete="new-password", placeholder="Choose a strong password (min 8 chars)") }}
-                    {{ render_field(form.confirm_password, type="password", class="form-control", autocomplete="new-password", placeholder="Confirm your password") }}
+                    {% call render_field(form.email) %}
+                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), autocomplete="email", placeholder="Your Email Address") }}
+                    {% endcall %}
 
-                    <div class="d-grid mt-4">
-                        {{ form.submit(class="btn btn-success btn-lg") }}
-                    </div>
+                    {% call render_field(form.password) %}
+                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), placeholder="Create a password") }}
+                    {% endcall %}
+
+                    {% call render_field(form.confirm_password) %}
+                        {{ form.confirm_password(class="form-control" + (" is-invalid" if form.confirm_password.errors else ""), placeholder="Confirm your password") }}
+                    {% endcall %}
+
+                    {{ form.submit(class="btn btn-primary w-100 mt-3") }}
                 </form>
-                 <hr>
-                 <div class="text-center small mt-3">
-                     <p>Already have an account? <a href="{{ url_for('auth.login') }}">Login here</a></p>
-                     <p>Registering an organization? <a href="{{ url_for('auth.organization_register') }}">Click here</a></p>
-                </div>
+            </div>
+            <div class="card-footer text-center">
+                <small class="text-muted">
+                    Already have an account? <a href="{{ url_for('auth.login') }}">Sign In</a>
+                </small>
             </div>
         </div>
     </div>

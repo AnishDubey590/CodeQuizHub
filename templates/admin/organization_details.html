@@ -1,0 +1,25 @@
+{# File: CodeQuizHub/templates/admin/organization_details.html #}
+{% extends "base.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>{{ organization.name }}</h1>
+    <hr>
+    <p><strong>ID:</strong> {{ organization.id }}</p>
+    <p><strong>Approval Status:</strong> {{ organization.approval_status.value }}</p>
+    <p><strong>Requested At:</strong> {{ organization.requested_at.strftime('%Y-%m-%d %H:%M') if organization.requested_at else 'N/A' }}</p>
+    <p><strong>Approved At:</strong> {{ organization.approved_at.strftime('%Y-%m-%d %H:%M') if organization.approved_at else 'N/A' }}</p>
+    
+    {% if organization.admin_user %}
+        <p><strong>Org Admin:</strong> {{ organization.admin_user.credentials.username }}
+           {% if organization.admin_user.email %}({{ organization.admin_user.email }}){% endif %}
+        </p>
+    {% endif %}
+
+    {# Add more details as needed, e.g., list of members, quizzes, etc. #}
+
+    <a href="{{ url_for('admin.view_organizations') }}" class="btn btn-secondary mt-3">Back to Organizations List</a>
+</div>
+{% endblock %}

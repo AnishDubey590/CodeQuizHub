@@ -4,7 +4,7 @@ from flask_login import login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
-
+from . import auth_bp
 from .. import db, mail  # Assuming mail is initialized in __init__
 from ..models import Credentials, User, UserRole, Organization, OrgApprovalStatus, OrganizationInvitation, InvitationStatus
 from .forms import (
@@ -14,50 +14,50 @@ from .forms import (
 # from ..utils.email import send_password_reset_email, send_invitation_email # TODO: Create email utility
 # from ..utils.tokens import generate_token, verify_token # TODO: Create token utility
 
-auth_bp = Blueprint('auth', __name__) # No need for separate template folder if using app structure
 
 
 # --- Standard Login/Logout ---
-
 @auth_bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.dashboard')) # Central dashboard dispatcher
+        # If already logged in, redirect to the central dashboard dispatcher
+        return redirect(url_for('main.dashboard'))
 
     form = LoginForm()
     if form.validate_on_submit():
-        # Find user by username
         creds = Credentials.query.filter_by(username=form.username.data).first()
-
-        # Alternatively, login by email:
-        # user_profile = User.query.filter_by(email=form.email.data).first()
-        # creds = user_profile.credentials if user_profile else None
 
         if creds and creds.check_password(form.password.data):
             if not creds.is_active:
                 flash('Your account is inactive. Please contact support.', 'warning')
                 return redirect(url_for('auth.login'))
 
-            # Check Organization status if applicable
+            # Perform organization status checks for non-admin roles that require an approved org
             if creds.role in [UserRole.ORGANIZATION, UserRole.TEACHER, UserRole.STUDENT]:
-                user_profile = creds.user_profile # Get the associated profile
+                # Ensure user_profile relationship exists on Credentials model and links to User model
+                # And User model has organization relationship
+                user_profile = creds.user # Assuming 'user' is the relationship from Credentials to User
                 if user_profile and user_profile.organization:
                     org = user_profile.organization
                     if org.approval_status == OrgApprovalStatus.REJECTED:
                         flash(f'The organization "{org.name}" registration was rejected.', 'danger')
                         return redirect(url_for('auth.login'))
-                    if org.approval_status == OrgApprovalStatus.PENDING and creds.role != UserRole.ORGANIZATION:
-                        # Allow Org Admin to log in when pending, but not Teachers/Students yet
-                        flash(f'The organization "{org.name}" is still pending approval.', 'warning')
+                    # Allow Org Admin (who is UserRole.ORGANIZATION) to log in if PENDING
+                    # But block Teacher/Student if Org is PENDING
+                    if org.approval_status == OrgApprovalStatus.PENDING and \
+                       creds.role in [UserRole.TEACHER, UserRole.STUDENT]:
+                        flash(f'The organization "{org.name}" is still pending approval. Please wait for admin confirmation.', 'warning')
                         return redirect(url_for('auth.login'))
-                elif creds.role != UserRole.ORGANIZATION: # Teacher/Student must have an org
-                     flash('Account error: Organization link missing. Please contact support.', 'danger')
+                elif creds.role in [UserRole.TEACHER, UserRole.STUDENT]: # Teacher/Student must have an org
+                     flash('Account error: Organization link missing or organization not found. Please contact support.', 'danger')
                      return redirect(url_for('auth.login'))
-
-
+            
+            # If all checks pass, log in the user
             login_user(creds, remember=form.remember_me.data)
+
             # Update last login time
-            creds.last_login_at = datetime.now(timezone.utc)
+            # Ensure your Credentials model has 'last_login_at' and it's a DateTime column
+            creds.last_login_at = datetime.now(timezone.utc) # Use timezone.utc
             try:
                 db.session.commit()
             except Exception as e:
@@ -66,7 +66,13 @@ def login():
 
             flash('Login successful!', 'success')
             next_page = request.args.get('next')
-            # Redirect to dispatcher which handles roles
+
+            # Basic protection against open redirect
+            if next_page and (not next_page.startswith('/') and not next_page.startswith(request.host_url)):
+                current_app.logger.warning(f"Open redirect attempt to '{next_page}' blocked for user '{creds.username}'.")
+                next_page = None # Discard unsafe next_page
+
+            # Redirect to the central dispatcher (main.dashboard) or the intended next_page
             return redirect(next_page or url_for('main.dashboard'))
         else:
             flash('Invalid username or password.', 'danger')
@@ -130,7 +136,7 @@ def individual_register():
             current_app.logger.error(f"Error during registration: {e}")
             flash('An error occurred during registration. Please try again.', 'danger')
 
-    return render_template('auth/register.html', title='Register', form=form)
+    return render_template('auth/individual_register.html', title='Register', form=form)
 
 
 @auth_bp.route('/register/organization', methods=['GET', 'POST'])
