@@ -30,6 +30,10 @@ def load_user(user_id):
     # Flask-Login passes the ID stored in the session
     return Credentials.query.get(int(user_id))
 
+from flask_wtf.csrf import CSRFProtect
+# ...
+csrf = CSRFProtect() # Create instance
+
 # --- Application Factory ---
 def create_app(config_name=None):
     """Application factory pattern."""
@@ -40,7 +44,7 @@ def create_app(config_name=None):
 
     # Load configuration
     app.config.from_object(config_by_name[config_name])
-
+    csrf.init_app(app) # Initialize with app
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)

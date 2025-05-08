@@ -1,18 +1,29 @@
 # File: CodeQuizHub/admin/routes.py
-from flask import Blueprint, render_template, flash, redirect, url_for, request, abort, current_app
+from flask import (
+    Blueprint, render_template, flash, redirect, url_for, request, abort, current_app
+)
 from flask_login import login_required, current_user
-from .. import db # Assuming your db instance is imported from the parent __init__
-from ..models import User, Credentials, Organization, OrgApprovalStatus, UserRole # Ensure all are imported
-from ..utils.decorators import admin_required # Use the decorator
+from .. import db  # Assuming your db instance is imported from the parent __init__
+from ..models import (
+    User, Credentials, Organization, OrgApprovalStatus, UserRole
+) # Ensure all necessary models and enums are imported
+from ..utils.decorators import admin_required  # Your custom admin decorator
 
-# Assuming admin_bp is defined in admin/__init__.py
+# Import the blueprint object defined in CodeQuizHub/admin/__init__.py
 from . import admin_bp
+# Import forms defined for the admin blueprint
+from .forms import OrgApprovalForm, UserActivationForm
+
 
 @admin_bp.route('/dashboard')
 @login_required
 @admin_required
 def dashboard():
     """Admin dashboard."""
+    pending_orgs = []
+    recent_users_creds = []
+    approval_form = OrgApprovalForm() # Instantiate form for CSRF in template
+
     try:
         # Ensure Organization model has 'approval_status' and 'requested_at'
         # Ensure OrgApprovalStatus enum has 'PENDING'
@@ -23,37 +34,37 @@ def dashboard():
         recent_users_creds = Credentials.query.order_by(Credentials.created_at.desc()).limit(5).all()
 
     except AttributeError as e:
-        # This can happen if a model is missing an expected attribute (column)
         current_app.logger.error(f"Admin dashboard query error: Missing attribute - {e}")
         flash("Error loading dashboard data: A model attribute might be missing. Check server logs.", "danger")
-        # Render a simpler dashboard or redirect to an error page
-        pending_orgs = []
-        recent_users_creds = []
-        # return render_template('admin/dashboard_error.html', error_message=str(e)) # Or similar
-
     except Exception as e:
-        # Catch other potential database query errors
         current_app.logger.error(f"Admin dashboard query error: {e}")
         flash(f"An unexpected error occurred while loading dashboard data: {e}", "danger")
-        pending_orgs = []
-        recent_users_creds = []
 
     return render_template('admin/dashboard.html',
                            title='Admin Dashboard',
                            pending_orgs=pending_orgs,
-                           recent_users_creds=recent_users_creds) # Pass credentials list
+                           recent_users_creds=recent_users_creds,
+                           approval_form=approval_form) # Pass the form for CSRF
 
 @admin_bp.route('/organizations')
 @login_required
 @admin_required
 def view_organizations():
-    """List all organizations."""
+    """List all organizations with pagination."""
     page = request.args.get('page', 1, type=int)
-    # Assuming your app config has POSTS_PER_PAGE or use a default
-    per_page = current_app.config.get('POSTS_PER_PAGE', 10)
-    pagination = Organization.query.order_by(Organization.name.asc()).paginate(page=page, per_page=per_page, error_out=False)
+    per_page = current_app.config.get('ADMIN_ITEMS_PER_PAGE', 10) # Use a config value or default
+    
+    organizations_query = Organization.query.order_by(Organization.name.asc())
+    pagination = organizations_query.paginate(page=page, per_page=per_page, error_out=False)
     organizations = pagination.items
-    return render_template('admin/view_organizations.html', title='Manage Organizations', organizations=organizations, pagination=pagination)
+    
+    approval_form = OrgApprovalForm() # Form for CSRF tokens on this page as well
+
+    return render_template('admin/view_organizations.html',
+                           title='Manage Organizations',
+                           organizations=organizations,
+                           pagination=pagination,
+                           approval_form=approval_form) # Pass form for CSRF
 
 @admin_bp.route('/organizations/approve/<int:org_id>', methods=['POST'])
 @login_required
@@ -62,33 +73,29 @@ def approve_organization(org_id):
     """Approve a pending organization."""
     org = Organization.query.get_or_404(org_id)
     if org.approval_status != OrgApprovalStatus.PENDING:
-        flash('Organization is not pending approval.', 'warning')
+        flash('Organization is not pending approval or has already been actioned.', 'warning')
         return redirect(url_for('admin.view_organizations'))
 
     try:
         org.approval_status = OrgApprovalStatus.APPROVED
-        org.approved_at = db.func.now() # Use DB function for timestamp
-
-        # **MODIFICATION HERE:** current_user is Credentials, linked to User via 'user' relationship
-        if current_user.user: # Ensure the admin's Credentials record is linked to a User record
-            org.approved_by_admin_id = current_user.user.id # ID of the admin's User record
+        org.approved_at = db.func.now()
+        if current_user.user: # current_user is Credentials, user is the User model instance
+            org.approved_by_admin_id = current_user.user.id
         else:
-            # This case should ideally not happen for a logged-in admin if data is consistent
-            current_app.logger.warning(f"Admin '{current_user.username}' (Credentials ID: {current_user.id}) performing approval has no associated User record.")
-            # Decide on fallback: org.approved_by_admin_id = None or raise error/flash message
+            current_app.logger.warning(f"Admin approval by Credentials ID {current_user.id} which has no linked User record for approved_by_admin_id.")
+            # org.approved_by_admin_id = None # Or handle as an error
 
-        # Activate the org admin user if they weren't already
-        # This assumes Organization has an 'admin_user' relationship to a User model,
-        # and User has a 'credentials' backref to the Credentials model.
+        # Activate the organization's primary admin user
         if org.admin_user and org.admin_user.credentials:
             org.admin_user.credentials.is_active = True
+        
         db.session.commit()
         flash(f'Organization "{org.name}" approved successfully.', 'success')
         # TODO: Send notification email to org admin
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error approving organization {org_id}: {e}")
-        flash(f'Error approving organization: {e}', 'danger')
+        flash(f'Error approving organization: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('admin.dashboard'))
 
@@ -100,23 +107,27 @@ def reject_organization(org_id):
     """Reject a pending organization."""
     org = Organization.query.get_or_404(org_id)
     if org.approval_status != OrgApprovalStatus.PENDING:
-        flash('Organization is not pending approval.', 'warning')
+        flash('Organization is not pending approval or has already been actioned.', 'warning')
         return redirect(url_for('admin.view_organizations'))
 
     try:
         org.approval_status = OrgApprovalStatus.REJECTED
-        # org.approved_at = None # Or some other logic for rejection timestamp/by
-        # org.approved_by_admin_id = None
-        # Optionally deactivate the associated admin user?
+        # Optionally record who rejected and when
+        # org.rejected_at = db.func.now()
+        # if current_user.user:
+        #     org.rejected_by_admin_id = current_user.user.id
+
+        # Deactivate the organization's primary admin user upon rejection
         if org.admin_user and org.admin_user.credentials:
-            org.admin_user.credentials.is_active = False # Example: Deactivate org admin on rejection
+            org.admin_user.credentials.is_active = False
+        
         db.session.commit()
         flash(f'Organization "{org.name}" rejected.', 'info')
-         # TODO: Send notification email to org admin
+        # TODO: Send notification email to org admin
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error rejecting organization {org_id}: {e}")
-        flash(f'Error rejecting organization: {e}', 'danger')
+        flash(f'Error rejecting organization: {str(e)}', 'danger')
 
     return redirect(request.referrer or url_for('admin.dashboard'))
 
@@ -125,34 +136,33 @@ def reject_organization(org_id):
 @login_required
 @admin_required
 def view_users():
-    """List all users (credentials)."""
+    """List all users (credentials) with pagination."""
     page = request.args.get('page', 1, type=int)
-    per_page = current_app.config.get('POSTS_PER_PAGE', 15)
-    # Order by username for consistency
-    pagination = Credentials.query.order_by(Credentials.username.asc()).paginate(page=page, per_page=per_page, error_out=False)
-    user_credentials_list = pagination.items # Renamed to avoid conflict with a 'users' variable if used elsewhere
-    return render_template('admin/view_users.html', title='Manage Users', user_credentials_list=user_credentials_list, pagination=pagination)
+    per_page = current_app.config.get('ADMIN_ITEMS_PER_PAGE', 15) # Use a config value or default
+    
+    # Query Credentials, and join with User to be able to sort by email or display user details
+    # Order by username for now
+    credentials_query = Credentials.query.order_by(Credentials.username.asc())
+    pagination = credentials_query.paginate(page=page, per_page=per_page, error_out=False)
+    user_credentials_list = pagination.items
+    
+    activation_form = UserActivationForm() # Form for CSRF tokens on this page
 
-# File: CodeQuizHub/admin/routes.py
-# ... (other imports and routes) ...
-
-@admin_bp.route('/organizations/details/<int:org_id>') # Or just /organizations/<int:org_id>
-@login_required
-@admin_required
-def view_organization_details(org_id):
-    org = Organization.query.get_or_404(org_id)
-    # You might want to fetch related data, e.g., members of the org, quizzes by the org, etc.
-    # org_members = User.query.filter_by(organization_id=org.id).all()
-    return render_template('admin/organization_details.html', title=f"Details for {org.name}", organization=org)
+    return render_template('admin/view_users.html',
+                           title='Manage Users',
+                           user_credentials_list=user_credentials_list,
+                           pagination=pagination,
+                           activation_form=activation_form) # Pass form for CSRF
 
 
 @admin_bp.route('/users/toggle_active/<int:creds_id>', methods=['POST'])
 @login_required
 @admin_required
 def toggle_user_active(creds_id):
-    creds_to_toggle = Credentials.query.get_or_404(creds_id) # Renamed to avoid confusion with current_user
+    """Toggle the active status of a user's credentials."""
+    creds_to_toggle = Credentials.query.get_or_404(creds_id)
 
-    if creds_to_toggle.id == current_user.id: # current_user is the admin's Credentials
+    if creds_to_toggle.id == current_user.id:
          flash("You cannot deactivate your own account.", "danger")
          return redirect(url_for('admin.view_users'))
     try:
@@ -163,7 +173,12 @@ def toggle_user_active(creds_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error updating user status for {creds_to_toggle.username}: {e}")
-        flash(f"Error updating user status: {e}", "danger")
+        flash(f"Error updating user status: {str(e)}", "danger")
     return redirect(url_for('admin.view_users'))
 
-# Add other admin routes as needed (view user details, edit roles, site settings, etc.)
+# TODO:
+# - Route to view individual organization details (admin.view_organization_details)
+# - Route to view individual user details (admin.view_user_details)
+# - Route to edit user roles
+# - Potentially delete users/organizations (with care and confirmation)
+# - Site settings page

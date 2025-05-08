@@ -1,4 +1,4 @@
-{# File: CodeQuizHub/templates/admin/dashboard.html #}
+{# File: CodeQuizHub/templates/admin/dashboard.html (REVISED FOR LAYOUT/STYLING) #}
 {% extends "base.html" %}
 
 {% block title %}{{ title }}{% endblock %}
@@ -10,77 +10,108 @@
         <span class="text-muted">Welcome, {{ current_user.username }}!</span>
     </div>
 
-    {# Display Flash Messages - Already in base.html, but can be here too if base changes #}
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
+    {# Flash Messages - Handled by base.html #}
 
     <div class="row">
-        <div class="col-md-8">
-            <h4>Pending Organization Approvals</h4>
-            {% if pending_orgs %}
-                <ul class="list-group">
-                    {% for org in pending_orgs %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
-                        <div>
-                            <strong>{{ org.name }}</strong><br>
-                            <small class="text-muted">Requested: {{ org.requested_at.strftime('%Y-%m-%d %H:%M') if org.requested_at else 'N/A' }}</small>
-                            {# Add Org Admin User info if available: org.admin_user.email #}
+        {# --- Pending Organizations Column --- #}
+        <div class="col-lg-8 mb-4"> {# Use col-lg-8 for larger screens, mb-4 for spacing #}
+            <div class="card">
+                <div class="card-header">
+                    <h4>Pending Organization Approvals</h4>
+                </div>
+                <div class="card-body p-0"> {# p-0 to let list-group manage padding #}
+                    {% if pending_orgs %}
+                        <ul class="list-group list-group-flush"> {# Flush removes card borders #}
+                            {% for org in pending_orgs %}
+                            <li class="list-group-item">
+                                <div class="row align-items-center">
+                                    {# Organization Info Column #}
+                                    <div class="col-md-7 col-lg-8">
+                                        <strong>{{ org.name }}</strong><br>
+                                        <small class="text-muted">
+                                            Requested: {{ org.requested_at.strftime('%Y-%m-%d %H:%M') if org.requested_at else 'N/A' }}
+                                        </small>
+                                        {# Display Admin Info - ADD TEXT TRUNCATION #}
+                                        {% if org.admin_user and org.admin_user.credentials %}
+                                            <div class="text-truncate" title="{{ org.admin_user.credentials.username }} {% if org.admin_user.email %}({{ org.admin_user.email }}){% endif %}">
+                                               <small>Admin: {{ org.admin_user.credentials.username }} {% if org.admin_user.email %}({{ org.admin_user.email }}){% endif %}</small>
+                                               {# ^^ IDENTIFY THE CORRECT VARIABLE FOR THE LONG STRING HERE. #}
+                                               {# If it's really long, text-truncate helps. Check what data it represents! #}
+                                            </div>
+                                        {% endif %}
+                                    </div>
+                                    {# Action Buttons Column #}
+                                    <div class="col-md-5 col-lg-4 text-md-end mt-2 mt-md-0"> {# Align buttons right on medium+ screens #}
+                                        <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Approve this organization?');">
+                                             {{ approval_form.hidden_tag() }} {# IF YOU PASSED approval_form from the route #}
+                                             {# OR {{ csrf_token() }} IF YOU DID NOT use a WTForm for this action #}
+                                             <button type="submit" class="btn btn-success btn-sm me-1" data-bs-toggle="tooltip" title="Approve"><i class="fas fa-check"></i> Approve</button>
+                                         </form>
+                                         <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Reject this organization?');">
+                                             {{ approval_form.hidden_tag() }} {# IF YOU PASSED approval_form from the route #}
+                                             {# OR {{ csrf_token() }} IF YOU DID NOT use a WTForm for this action #}
+                                             <button type="submit" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Reject"><i class="fas fa-times"></i> Reject</button>
+                                         </form>
+                                        {# Details link can go here too #}
+                                    </div>
+                                </div> {# End internal row #}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="card-body text-center text-muted">
+                            <p>No organizations are currently pending approval.</p>
                         </div>
-                        <div>
-                            {# Ensure these routes exist and your forms are set up for POST #}
-                            <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" class="d-inline">
-                                {{ csrf_token() }} {# If your POST routes are CSRF protected, which they should be #}
-                                <button type="submit" class="btn btn-success btn-sm me-1">Approve</button>
-                            </form>
-                            <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline">
-                                {{ csrf_token() }}
-                                <button type="submit" class="btn btn-danger btn-sm">Reject</button>
-                            </form>
-                            {# Add a link to view org details if you have such a route #}
-                            <!-- <a href="{{ url_for('admin.view_organization_details', org_id=org.id) }}" class="btn btn-info btn-sm ms-1">Details</a> -->
-                        </div>
-                    </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="text-muted">No organizations are currently pending approval.</p>
-            {% endif %}
-            <div class="mt-3">
-                 <a href="{{ url_for('admin.view_organizations') }}" class="btn btn-outline-primary">View All Organizations</a>
-            </div>
+                    {% endif %}
+                </div> {# End card-body #}
+                <div class="card-footer text-center">
+                     <a href="{{ url_for('admin.view_organizations') }}" class="btn btn-outline-primary btn-sm">View All Organizations</a>
+                </div>
+            </div> {# End card #}
         </div>
 
-        <div class="col-md-4">
-            <h4>Site Management</h4>
-            <div class="list-group">
-                <a href="{{ url_for('admin.view_users') }}" class="list-group-item list-group-item-action">Manage Users</a>
-                <!-- Add links to other admin sections like site settings, content management etc. -->
-                <!-- <a href="#" class="list-group-item list-group-item-action disabled">Site Settings</a> -->
+        {# --- Site Management & Recent Users Column --- #}
+        <div class="col-lg-4 mb-4">
+            <div class="card mb-4"> {# Card for Site Management #}
+                 <div class="card-header"><h4>Site Management</h4></div>
+                 <div class="list-group list-group-flush">
+                    <a href="{{ url_for('admin.view_users') }}" class="list-group-item list-group-item-action">Manage Users</a>
+                    {# <a href="#" class="list-group-item list-group-item-action disabled">Site Settings</a> #}
+                 </div>
             </div>
 
-            <h4 class="mt-4">Recent User Registrations</h4>
-            {% if recent_users_creds %}
-                <ul class="list-group">
-                    {% for creds in recent_users_creds %}
-                        <li class="list-group-item">
-                            {{ creds.username }} ({{ creds.role.value }})
-                            {% if creds.user and creds.user.email %}- {{ creds.user.email }}{% endif %}<br>
-                            <small class="text-muted">Joined: {{ creds.created_at.strftime('%Y-%m-%d %H:%M') if creds.created_at else 'N/A' }}</small>
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% else %}
-                <p class="text-muted">No recent user registrations.</p>
-            {% endif %}
+            <div class="card"> {# Card for Recent Users #}
+                 <div class="card-header"><h4>Recent User Registrations</h4></div>
+                 {% if recent_users_creds %}
+                     <ul class="list-group list-group-flush">
+                         {% for creds in recent_users_creds %}
+                             <li class="list-group-item">
+                                 <div class="text-truncate" title="{{ creds.username }} ({{ creds.role.value }}) {% if creds.user and creds.user.email %}- {{ creds.user.email }}{% endif %}">
+                                     {{ creds.username }} ({{ creds.role.value }})
+                                     {% if creds.user and creds.user.email %}<small class="text-muted">- {{ creds.user.email }}</small>{% endif %}
+                                 </div>
+                                 <small class="text-muted">Joined: {{ creds.created_at.strftime('%Y-%m-%d %H:%M') if creds.created_at else 'N/A' }}</small>
+                             </li>
+                         {% endfor %}
+                     </ul>
+                 {% else %}
+                     <div class="card-body text-center text-muted">
+                        <p>No recent user registrations.</p>
+                     </div>
+                 {% endif %}
+            </div>
         </div>
-    </div>
+    </div> {# End main row #}
 </div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  // Optional: Initialize Bootstrap tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+  })
+</script>
 {% endblock %}
