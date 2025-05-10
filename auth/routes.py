@@ -36,7 +36,7 @@ def login():
             if creds.role in [UserRole.ORGANIZATION, UserRole.TEACHER, UserRole.STUDENT]:
                 # Ensure user_profile relationship exists on Credentials model and links to User model
                 # And User model has organization relationship
-                user_profile = creds.user # Assuming 'user' is the relationship from Credentials to User
+                user_profile = creds.user_profile
                 if user_profile and user_profile.organization:
                     org = user_profile.organization
                     if org.approval_status == OrgApprovalStatus.REJECTED:

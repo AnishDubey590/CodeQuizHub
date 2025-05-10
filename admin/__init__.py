@@ -1,15 +1,26 @@
 # File: CodeQuizHub/admin/__init__.py
-from flask import Blueprint
+from flask import Blueprint,Flask
 
 admin_bp = Blueprint(
     'admin',
     __name__,
-    template_folder='templates',
-    # url_prefix='/admin' is usually set when registering the blueprint in the app factory,
-    # but can also be set here. If it's in create_app(), no need for it here.
-    # static_folder='static', # If you have admin-specific static files
-    # static_url_path='/admin/static'
+    template_folder='templates'
+    # If setting url_prefix here, remove it from create_app registration
+    # url_prefix='/admin'
 )
+def create_app(config_name=None):
+    # ...
+    app = Flask(__name__, instance_relative_config=False)
 
-# Crucial: Import routes AFTER the blueprint object is created
+    # --- ENABLE JINJA EXTENSIONS HERE ---
+    app.jinja_env.add_extension('jinja2.ext.do') # Add this line
+
+    # ... rest of config loading ...
+    # ... extension initializations (db.init_app, etc) ...
+    # ... blueprint registrations ...
+    # ... context processors ...
+
+    return app
+# Ensure routes and forms (if any directly used by __init__) are imported last
 from . import routes
+from . import forms # Import forms if needed globally within blueprint, otherwise just needed by routes

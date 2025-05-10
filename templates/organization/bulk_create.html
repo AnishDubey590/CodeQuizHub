@@ -1,0 +1,46 @@
+{# File: CodeQuizHub/templates/organization/bulk_create.html #}
+{% extends "base.html" %}
+{% from "macros/_formhelpers.html" import render_field %}
+
+{% block title %}{{ title }} - {{ org.name if org else 'Organization' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+             <div class="card shadow-sm">
+                 <div class="card-header d-flex justify-content-between align-items-center">
+                    <h2>{{ title }}</h2>
+                    <a href="{{ url_for('.manage_members') }}" class="btn btn-sm btn-outline-secondary">Cancel</a>
+                </div>
+                 <div class="card-body">
+                     {# Flash messages handled by base.html #}
+                     <p class="lead">Upload a CSV or Excel file to create multiple member accounts.</p>
+                     <div class="alert alert-info small">
+                         <h5 class="alert-heading">File Format Instructions:</h5>
+                         <ul>
+                             <li>Required columns: <code>username</code>, <code>email</code>, <code>password</code>, <code>role</code>.</li>
+                             <li>Optional columns: <code>display_name</code>, <code>student_code</code>.</li>
+                             <li>Allowed roles in the file: <code>Teacher</code>, <code>Student</code> (case-insensitive).</li>
+                             <li>If `display_name` is blank, it will default to the `username`.</li>
+                             <li>Users with existing usernames or emails in the system will be skipped.</li>
+                         </ul>
+                     </div>
+
+                     <form method="POST" action="{{ url_for('.bulk_create_members') }}" enctype="multipart/form-data" novalidate>
+                        {{ form.hidden_tag() }}
+
+                        {% call render_field(form.file, label_visible=true) %} {# Show label for file field #}
+                             {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else "")) }}
+                        {% endcall %}
+
+                        <div class="mt-4 d-grid">
+                             {{ form.submit(class="btn btn-primary btn-lg") }}
+                         </div>
+                     </form>
+                 </div>
+             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

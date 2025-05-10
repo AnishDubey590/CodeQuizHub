@@ -1,18 +1,23 @@
 {# File: CodeQuizHub/templates/admin/view_organizations.html #}
 {% extends "base.html" %}
-{% from "macros/_pagination.html" import render_pagination %} {# Import pagination macro #}
+{% from "macros/_pagination.html" import render_pagination %}
 
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>{{ title }}</h1>
-
-    {# Optional: Add filters or search bar here later #}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+         <h1>{{ title }}</h1>
+         {# Basic Search Form #}
+         <form method="GET" action="{{ url_for('admin.view_organizations') }}" class="d-flex">
+             <input type="search" name="q" class="form-control me-2" placeholder="Search organizations..." value="{{ q or '' }}" aria-label="Search">
+             <button class="btn btn-outline-secondary" type="submit">Search</button>
+         </form>
+    </div>
 
     {% if organizations %}
     <div class="table-responsive">
-        <table class="table table-striped table-hover">
+        <table class="table table-striped table-hover align-middle"> {# align-middle for button vertical alignment #}
             <thead>
                 <tr>
                     <th>ID</th>
@@ -20,6 +25,7 @@
                     <th>Admin User</th>
                     <th>Status</th>
                     <th>Requested</th>
+                    <th>Approved/Rejected</th>
                     <th>Actions</th>
                 </tr>
             </thead>
@@ -29,7 +35,6 @@
                     <td>{{ org.id }}</td>
                     <td>{{ org.name }}</td>
                     <td>
-                        {# Access admin user info safely #}
                         {% if org.admin_user and org.admin_user.credentials %}
                             {{ org.admin_user.credentials.username }}
                         {% else %}
@@ -43,20 +48,29 @@
                     </td>
                     <td>{{ org.requested_at.strftime('%Y-%m-%d') if org.requested_at else 'N/A' }}</td>
                     <td>
+                         {% if org.approval_status == OrgApprovalStatus.APPROVED %}
+                              {{ org.approved_at.strftime('%Y-%m-%d') if org.approved_at else 'N/A' }}
+                              {% if org.approved_by %} by {{ org.approved_by.username }} {% endif %} {# Assuming approved_by relationship #}
+                         {% elif org.approval_status == OrgApprovalStatus.REJECTED %}
+                              {{ org.rejected_at.strftime('%Y-%m-%d') if org.rejected_at else 'N/A' }} {# Assuming rejected_at field #}
+                         {% else %}
+                              <span class="text-muted">-</span>
+                         {% endif %}
+                    </td>
+                    <td>
                         {% if org.approval_status == OrgApprovalStatus.PENDING %}
                             <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Approve this organization?');">
-                                {{ csrf_token() }} {# Required for POST requests with CSRF protection #}
+                                {{ approval_form.hidden_tag() }}
                                 <button type="submit" class="btn btn-success btn-sm" data-bs-toggle="tooltip" title="Approve"><i class="fas fa-check"></i></button>
                             </form>
                             <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Reject this organization?');">
-                                {{ csrf_token() }}
+                                {{ approval_form.hidden_tag() }}
                                 <button type="submit" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Reject"><i class="fas fa-times"></i></button>
                             </form>
                         {% else %}
-                            {# Optionally show other actions for approved/rejected orgs #}
+                            {# Add button to revert status maybe? Or view details #}
                             <span class="text-muted">-</span>
                         {% endif %}
-                         {# Link to details page (if implemented) #}
                          {# <a href="{{ url_for('admin.view_organization_details', org_id=org.id) }}" class="btn btn-info btn-sm ms-1" data-bs-toggle="tooltip" title="Details"><i class="fas fa-eye"></i></a> #}
                     </td>
                 </tr>
@@ -65,27 +79,22 @@
         </table>
     </div>
 
-    {# Render pagination controls #}
-    {{ render_pagination(pagination, 'admin.view_organizations') }}
+    {{ render_pagination(pagination, 'admin.view_organizations', q=q) }} {# Pass q to pagination if searching #}
 
     {% else %}
-    <p class="text-center text-muted">No organizations found.</p>
+    <p class="text-center text-muted">No organizations found{% if q %} matching your search{% endif %}.</p>
     {% endif %}
 
     <div class="mt-4">
         <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Back to Admin Dashboard</a>
     </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
-{{ super() }} {# Include scripts from base.html if needed #}
+{{ super() }}
 <script>
-  // Optional: Initialize Bootstrap tooltips if you use them
   var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl)
-  })
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl) })
 </script>
 {% endblock %}

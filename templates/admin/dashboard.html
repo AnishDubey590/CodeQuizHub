@@ -1,4 +1,4 @@
-{# File: CodeQuizHub/templates/admin/dashboard.html (REVISED FOR LAYOUT/STYLING) #}
+{# File: CodeQuizHub/templates/admin/dashboard.html #}
 {% extends "base.html" %}
 
 {% block title %}{{ title }}{% endblock %}
@@ -13,74 +13,57 @@
     {# Flash Messages - Handled by base.html #}
 
     <div class="row">
-        {# --- Pending Organizations Column --- #}
-        <div class="col-lg-8 mb-4"> {# Use col-lg-8 for larger screens, mb-4 for spacing #}
+        <div class="col-lg-8 mb-4">
             <div class="card">
-                <div class="card-header">
-                    <h4>Pending Organization Approvals</h4>
-                </div>
-                <div class="card-body p-0"> {# p-0 to let list-group manage padding #}
+                <div class="card-header"><h4>Pending Organization Approvals</h4></div>
+                <div class="card-body p-0">
                     {% if pending_orgs %}
-                        <ul class="list-group list-group-flush"> {# Flush removes card borders #}
+                        <ul class="list-group list-group-flush">
                             {% for org in pending_orgs %}
                             <li class="list-group-item">
-                                <div class="row align-items-center">
-                                    {# Organization Info Column #}
+                                <div class="row align-items-center gy-2"> {# gy-2 adds vertical gap on small screens #}
                                     <div class="col-md-7 col-lg-8">
                                         <strong>{{ org.name }}</strong><br>
-                                        <small class="text-muted">
-                                            Requested: {{ org.requested_at.strftime('%Y-%m-%d %H:%M') if org.requested_at else 'N/A' }}
-                                        </small>
-                                        {# Display Admin Info - ADD TEXT TRUNCATION #}
+                                        <small class="text-muted">Requested: {{ org.requested_at.strftime('%Y-%m-%d %H:%M') if org.requested_at else 'N/A' }}</small>
                                         {% if org.admin_user and org.admin_user.credentials %}
                                             <div class="text-truncate" title="{{ org.admin_user.credentials.username }} {% if org.admin_user.email %}({{ org.admin_user.email }}){% endif %}">
                                                <small>Admin: {{ org.admin_user.credentials.username }} {% if org.admin_user.email %}({{ org.admin_user.email }}){% endif %}</small>
-                                               {# ^^ IDENTIFY THE CORRECT VARIABLE FOR THE LONG STRING HERE. #}
-                                               {# If it's really long, text-truncate helps. Check what data it represents! #}
                                             </div>
                                         {% endif %}
                                     </div>
-                                    {# Action Buttons Column #}
-                                    <div class="col-md-5 col-lg-4 text-md-end mt-2 mt-md-0"> {# Align buttons right on medium+ screens #}
+                                    <div class="col-md-5 col-lg-4 text-md-end">
                                         <form action="{{ url_for('admin.approve_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Approve this organization?');">
-                                             {{ approval_form.hidden_tag() }} {# IF YOU PASSED approval_form from the route #}
-                                             {# OR {{ csrf_token() }} IF YOU DID NOT use a WTForm for this action #}
-                                             <button type="submit" class="btn btn-success btn-sm me-1" data-bs-toggle="tooltip" title="Approve"><i class="fas fa-check"></i> Approve</button>
-                                         </form>
-                                         <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Reject this organization?');">
-                                             {{ approval_form.hidden_tag() }} {# IF YOU PASSED approval_form from the route #}
-                                             {# OR {{ csrf_token() }} IF YOU DID NOT use a WTForm for this action #}
-                                             <button type="submit" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Reject"><i class="fas fa-times"></i> Reject</button>
-                                         </form>
-                                        {# Details link can go here too #}
+                                            {{ approval_form.hidden_tag() }}
+                                            <button type="submit" class="btn btn-success btn-sm me-1" data-bs-toggle="tooltip" title="Approve"><i class="fas fa-check"></i> Approve</button>
+                                        </form>
+                                        <form action="{{ url_for('admin.reject_organization', org_id=org.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Reject this organization?');">
+                                            {{ approval_form.hidden_tag() }}
+                                            <button type="submit" class="btn btn-danger btn-sm" data-bs-toggle="tooltip" title="Reject"><i class="fas fa-times"></i> Reject</button>
+                                        </form>
                                     </div>
-                                </div> {# End internal row #}
+                                </div>
                             </li>
                             {% endfor %}
                         </ul>
                     {% else %}
-                        <div class="card-body text-center text-muted">
-                            <p>No organizations are currently pending approval.</p>
-                        </div>
+                         <div class="card-body text-center text-muted"><p>No organizations pending approval.</p></div>
                     {% endif %}
-                </div> {# End card-body #}
+                </div>
                 <div class="card-footer text-center">
                      <a href="{{ url_for('admin.view_organizations') }}" class="btn btn-outline-primary btn-sm">View All Organizations</a>
                 </div>
-            </div> {# End card #}
+            </div>
         </div>
 
-        {# --- Site Management & Recent Users Column --- #}
         <div class="col-lg-4 mb-4">
-            <div class="card mb-4"> {# Card for Site Management #}
+            <div class="card mb-4">
                  <div class="card-header"><h4>Site Management</h4></div>
                  <div class="list-group list-group-flush">
                     <a href="{{ url_for('admin.view_users') }}" class="list-group-item list-group-item-action">Manage Users</a>
-                    {# <a href="#" class="list-group-item list-group-item-action disabled">Site Settings</a> #}
                  </div>
             </div>
 
-            <div class="card"> {# Card for Recent Users #}
+            <div class="card">
                  <div class="card-header"><h4>Recent User Registrations</h4></div>
                  {% if recent_users_creds %}
                      <ul class="list-group list-group-flush">
@@ -88,30 +71,27 @@
                              <li class="list-group-item">
                                  <div class="text-truncate" title="{{ creds.username }} ({{ creds.role.value }}) {% if creds.user and creds.user.email %}- {{ creds.user.email }}{% endif %}">
                                      {{ creds.username }} ({{ creds.role.value }})
-                                     {% if creds.user and creds.user.email %}<small class="text-muted">- {{ creds.user.email }}</small>{% endif %}
+                                     {% if creds.user and creds.user.email %}<small class="text-muted"> - {{ creds.user.email }}</small>{% endif %}
                                  </div>
                                  <small class="text-muted">Joined: {{ creds.created_at.strftime('%Y-%m-%d %H:%M') if creds.created_at else 'N/A' }}</small>
+                                 {# Link to view user details #}
+                                  <a href="{{ url_for('admin.view_user_details', creds_id=creds.id) }}" class="btn btn-xs btn-outline-secondary float-end"><i class="fas fa-eye"></i></a>
                              </li>
                          {% endfor %}
                      </ul>
                  {% else %}
-                     <div class="card-body text-center text-muted">
-                        <p>No recent user registrations.</p>
-                     </div>
+                      <div class="card-body text-center text-muted"><p>No recent user registrations.</p></div>
                  {% endif %}
             </div>
         </div>
-    </div> {# End main row #}
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
-  // Optional: Initialize Bootstrap tooltips
   var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl)
-  })
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl) })
 </script>
 {% endblock %}

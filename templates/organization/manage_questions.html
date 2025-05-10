@@ -1,0 +1,57 @@
+{# File: CodeQuizHub/templates/organization/manage_questions.html #}
+{% extends "base.html" %}
+{% from "macros/_pagination.html" import render_pagination %}
+
+{% block title %}{{ title }} - {{ org.name if org else 'Organization' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1>{{ title }}</h1>
+            {% if org %}<h5 class="text-muted">{{ org.name }}</h5>{% endif %}
+        </div>
+         {# Link to where Teachers/Org Admins create questions #}
+        <a href="#" class="btn btn-primary disabled">
+            <i class="fas fa-plus-circle me-1"></i> Create New Question (TODO)
+        </a>
+    </div>
+
+    {# Flash messages handled by base.html #}
+
+    {% if questions %}
+     <div class="list-group">
+         {% for q_item in questions %} {# Renamed to avoid conflict with route's q param #}
+         <div class="list-group-item list-group-item-action flex-column align-items-start">
+             <div class="d-flex w-100 justify-content-between">
+               <h5 class="mb-1">{{ loop.index + pagination.first -1 }}. {{ q_item.question_text | truncate(100) }}</h5>
+               <small class="text-muted">{{ q_item.created_at.strftime('%Y-%m-%d') if q_item.created_at else '-' }}</small>
+             </div>
+             <p class="mb-1">
+                <span class="badge bg-secondary">{{ q_item.question_type.value }}</span>
+                <span class="badge bg-light text-dark border">{{ q_item.difficulty or 'N/A' }}</span>
+                <span class="badge bg-info">{{ q_item.points }} pt(s)</span>
+                {% if q_item.is_public %}<span class="badge bg-success">Public</span>{% endif %}
+             </p>
+             <small class="text-muted">Creator: {{ q_item.creator.credentials.username if q_item.creator and q_item.creator.credentials else 'Org Default' }}</small>
+             {# TODO: Add view/edit/delete actions #}
+             <div class="float-end">
+                <a href="#" class="btn btn-sm btn-outline-primary disabled"><i class="fas fa-edit"></i></a>
+             </div>
+         </div>
+         {% endfor %}
+     </div>
+
+      {# Build query_args if this page had filters #}
+    {% set query_args = {} %}
+    {{ render_pagination(pagination, '.manage_questions', query_params=query_args) }}
+
+    {% else %}
+        <p class="text-center text-muted">No questions found for this organization. <a href="#">Create some now!</a></p>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

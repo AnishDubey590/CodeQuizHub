@@ -1,0 +1,257 @@
+{# File: CodeQuizHub/templates/organization/manage_members.html #}
+{% extends "base.html" %}
+{% from "macros/_pagination.html" import render_pagination %}
+{% from "macros/_formhelpers.html" import render_field %} {# For the modal forms #}
+
+{% block title %}{{ title }} - {{ org.name if org else 'Organization' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <div>
+            <h1>{{ title }}</h1>
+            {% if org %}<h5 class="text-muted">{{ org.name }}</h5>{% endif %}
+        </div>
+        {% if current_user.role == UserRole.ORGANIZATION %} {# Org Admin Actions #}
+        <div class="btn-group" role="group" aria-label="Member Actions">
+             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createUserModal">
+                 <i class="fas fa-user-plus me-1"></i> Create Account
+             </button>
+             <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#inviteMemberModal">
+                 <i class="fas fa-envelope me-1"></i> Invite User
+             </button>
+             <a href="{{ url_for('.bulk_create_members') }}" class="btn btn-success"><i class="fas fa-users me-1"></i> Bulk Create/Upload</a>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Search and Filter Form #}
+    <form method="GET" action="{{ url_for('.manage_members') }}" class="mb-3 p-3 border rounded bg-light">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-4">
+                <label for="q_members" class="form-label fw-bold">Search</label>
+                <input type="search" name="q" id="q_members" class="form-control form-control-sm" placeholder="Username, Email, Name..." value="{{ q or '' }}">
+            </div>
+            <div class="col-md-3">
+                <label for="role_filter_members" class="form-label fw-bold">Role</label>
+                <select name="role" id="role_filter_members" class="form-select form-select-sm">
+                    <option value="" {% if not role_filter %}selected{% endif %}>All Roles (Teacher/Student)</option>
+                    {# Only allow filtering by roles an Org Admin typically manages directly #}
+                    {% for role_opt in [UserRole.TEACHER, UserRole.STUDENT] %}
+                    <option value="{{ role_opt.name }}" {% if role_filter == role_opt.name %}selected{% endif %}>{{ role_opt.value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="active_filter_members" class="form-label fw-bold">Status</label>
+                <select name="active_filter" id="active_filter_members" class="form-select form-select-sm">
+                     <option value="" {% if not active_filter %}selected{% endif %}>Any Account Status</option>
+                     <option value="true" {% if active_filter == 'true' %}selected{% endif %}>Active Accounts</option>
+                     <option value="false" {% if active_filter == 'false' %}selected{% endif %}>Inactive Accounts</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-sm btn-outline-secondary w-100" type="submit">Filter</button>
+                {% if q or role_filter or active_filter %}
+                    <a href="{{ url_for('.manage_members') }}" class="btn btn-sm btn-outline-danger w-100 mt-1" title="Clear Filters"><i class="fas fa-times"></i> Clear</a>
+                {% endif %}
+            </div>
+        </div>
+    </form>
+
+    {# Flash messages are handled by base.html #}
+
+    {% if members %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle small">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Email</th>
+                    <th>Display Name</th>
+                    <th>Role</th>
+                    <th>Account Status</th>
+                    <th>Enrolled On</th>
+                    <th>Student Code</th>
+                    <th>Performance (Placeholder)</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member_user in members %} {# members are User objects from the route #}
+                <tr>
+                    <td>{{ member_user.credentials.username }}</td>
+                    <td>{{ member_user.email }}</td>
+                    <td>{{ member_user.display_name or '-' }}</td>
+                    <td><span class="badge bg-info text-dark">{{ member_user.credentials.role.value }}</span></td>
+                    <td>
+                        {% if member_user.credentials.is_active %}
+                            <span class="badge rounded-pill bg-success">Active</span>
+                        {% else %}
+                            <span class="badge rounded-pill bg-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ member_user.enrollment_date.strftime('%Y-%m-%d') if member_user.enrollment_date else '-'}}</td>
+                    <td>{{ member_user.student_code or '-' }}</td>
+                    <td>
+                        <small class="text-muted">Quizzes: 0/0 Avg: N/A</small> {# Placeholder #}
+                    </td>
+                    <td>
+                         {# Corrected "View Profile" Link #}
+                         <a href="{{ url_for('main.view_user_profile_by_id', user_id=member_user.id) }}"
+                            class="btn btn-info btn-sm py-0 px-1" data-bs-toggle="tooltip" title="View Profile"><i class="fas fa-eye"></i></a>
+
+                        {# Org Admin might edit certain aspects or trigger activation via Admin panel link #}
+                        {% if current_user.role == UserRole.ORGANIZATION %}
+                            {# Example link to an admin function (if implemented and appropriate) #}
+                            {# Or a dedicated org-level edit member route #}
+                            <a href="{{ url_for('admin.edit_user', creds_id=member_user.credentials.id) if 'edit_user' in url_for('admin', _method='GET', creds_id=member_user.credentials.id, _fail_quietly=True) else '#' }}"
+                               class="btn btn-primary btn-sm py-0 px-1 ms-1 {{ 'disabled' if not ('edit_user' in url_for('admin', _method='GET', creds_id=member_user.credentials.id, _fail_quietly=True)) }}"
+                               data-bs-toggle="tooltip" title="Edit User (Admin Panel)"><i class="fas fa-user-cog"></i></a>
+
+                            {# TODO: Implement Remove Member from Organization (soft delete or disassociation) #}
+                            <!--
+                            <form action="{{ url_for('.remove_member', user_id=member_user.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remove {{member_user.credentials.username}} from this organization?');">
+                                {{ user_action_form.hidden_tag() }} {# Assuming user_action_form is passed for CSRF #}
+                                <button type="submit" class="btn btn-danger btn-sm py-0 px-1 ms-1" data-bs-toggle="tooltip" title="Remove from Org"><i class="fas fa-user-times"></i></button>
+                            </form>
+                            -->
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Build query_args dictionary for pagination #}
+    {% set query_args = {} %}
+    {% if q %}{% do query_args.update({'q': q}) %}{% endif %}
+    {% if role_filter %}{% do query_args.update({'role': role_filter}) %}{% endif %}
+    {% if active_filter %}{% do query_args.update({'active_filter': active_filter}) %}{% endif %}
+    {{ render_pagination(pagination, '.manage_members', query_params=query_args) }}
+
+    {% else %}
+         <p class="text-center text-muted">No members found{% if q or role_filter or active_filter %} matching criteria. Try adjusting your filters or search term.{% endif %}.</p>
+    {% endif %}
+
+     <div class="mt-4">
+        <a href="{{ url_for('.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Dashboard</a>
+    </div>
+</div>
+
+<!-- Create User Modal (passed as create_user_form from route) -->
+<div class="modal fade" id="createUserModal" tabindex="-1" aria-labelledby="createUserModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.create_org_member') }}" novalidate>
+          {{ create_user_form.hidden_tag() }}
+          <div class="modal-header">
+            <h5 class="modal-title" id="createUserModalLabel">Create New Member Account</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+             {% call render_field(create_user_form.username) %}
+                 {{ create_user_form.username(class="form-control" + (" is-invalid" if create_user_form.username.errors else ""), autocomplete="off") }}
+             {% endcall %}
+             {% call render_field(create_user_form.email) %}
+                 {{ create_user_form.email(class="form-control" + (" is-invalid" if create_user_form.email.errors else ""), autocomplete="off") }}
+             {% endcall %}
+             {% call render_field(create_user_form.display_name) %}
+                 {{ create_user_form.display_name(class="form-control" + (" is-invalid" if create_user_form.display_name.errors else "")) }}
+             {% endcall %}
+             <div class="row">
+                 <div class="col-md-6">
+                    {% call render_field(create_user_form.password) %}
+                        {{ create_user_form.password(class="form-control" + (" is-invalid" if create_user_form.password.errors else ""), autocomplete="new-password") }}
+                    {% endcall %}
+                 </div>
+                 <div class="col-md-6">
+                    {% call render_field(create_user_form.confirm_password) %}
+                        {{ create_user_form.confirm_password(class="form-control" + (" is-invalid" if create_user_form.confirm_password.errors else ""), autocomplete="new-password") }}
+                    {% endcall %}
+                 </div>
+             </div>
+             {% call render_field(create_user_form.role) %}
+                 {{ create_user_form.role(class="form-select" + (" is-invalid" if create_user_form.role.errors else "")) }}
+             {% endcall %}
+             {# This simple conditional relies on the student_code field being present in create_user_form #}
+             {% if create_user_form.student_code %}
+                <div id="studentCodeFieldWrapper"> {# Wrapper for JS targeting #}
+                    {% call render_field(create_user_form.student_code) %}
+                        {{ create_user_form.student_code(class="form-control" + (" is-invalid" if create_user_form.student_code.errors else "")) }}
+                    {% endcall %}
+                </div>
+             {% endif %}
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            {{ create_user_form.submit(class="btn btn-primary") }}
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Invite Single Member Modal (passed as invite_form from route) -->
+<div class="modal fade" id="inviteMemberModal" tabindex="-1" aria-labelledby="inviteMemberModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="POST" action="{{ url_for('.invite_member') }}" novalidate>
+          {{ invite_form.hidden_tag() }}
+          <div class="modal-header">
+            <h5 class="modal-title" id="inviteMemberModalLabel">Invite New Member</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+             {% call render_field(invite_form.email) %}
+                 {{ invite_form.email(class="form-control" + (" is-invalid" if invite_form.email.errors else ""), placeholder="member@example.com") }}
+             {% endcall %}
+              {% call render_field(invite_form.role) %}
+                 {{ invite_form.role(class="form-select" + (" is-invalid" if invite_form.role.errors else "")) }}
+             {% endcall %}
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            {{ invite_form.submit(class="btn btn-primary") }}
+          </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  // Tooltips
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl) })
+
+  // Optional: Basic JS to show/hide student_code field in Create User Modal based on role
+  // This is a very simple example; more robust JS might be needed.
+  const roleSelect = document.querySelector('#createUserModal select[name="role"]');
+  const studentCodeWrapper = document.getElementById('studentCodeFieldWrapper');
+
+  function toggleStudentCodeField() {
+    if (roleSelect && studentCodeWrapper) {
+      if (roleSelect.value === 'STUDENT') { // Assumes role value is 'STUDENT' for Student
+        studentCodeWrapper.style.display = 'block';
+      } else {
+        studentCodeWrapper.style.display = 'none';
+        // Optionally clear the student_code input when role is not student
+        const studentCodeInput = studentCodeWrapper.querySelector('input[name="student_code"]');
+        if (studentCodeInput) {
+            studentCodeInput.value = '';
+        }
+      }
+    }
+  }
+
+  if (roleSelect) {
+    roleSelect.addEventListener('change', toggleStudentCodeField);
+    // Initial call to set visibility based on default role
+    toggleStudentCodeField();
+  }
+</script>
+{% endblock %}

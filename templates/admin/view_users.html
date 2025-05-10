@@ -1,23 +1,29 @@
 {# File: CodeQuizHub/templates/admin/view_users.html #}
 {% extends "base.html" %}
-{% from "macros/_pagination.html" import render_pagination %} {# Import pagination macro #}
+{% from "macros/_pagination.html" import render_pagination %}
 
 {% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>{{ title }}</h1>
+     <div class="d-flex justify-content-between align-items-center mb-3">
+         <h1>{{ title }}</h1>
+         {# Basic Search Form #}
+         <form method="GET" action="{{ url_for('admin.view_users') }}" class="d-flex">
+             <input type="search" name="q" class="form-control me-2" placeholder="Search username, email, name..." value="{{ q or '' }}" aria-label="Search">
+             <button class="btn btn-outline-secondary" type="submit">Search</button>
+         </form>
+    </div>
 
-    {# Optional: Add filters or search bar here later #}
-
-    {% if user_credentials_list %} {# Use the variable name passed from the route #}
+    {% if user_credentials_list %}
     <div class="table-responsive">
-        <table class="table table-striped table-hover">
+        <table class="table table-striped table-hover align-middle">
             <thead>
                 <tr>
                     <th>ID</th>
                     <th>Username</th>
                     <th>Email</th>
+                    <th>Display Name</th>
                     <th>Role</th>
                     <th>Status</th>
                     <th>Joined</th>
@@ -30,12 +36,14 @@
                     <td>{{ creds.id }}</td>
                     <td>{{ creds.username }}</td>
                     <td>
-                        {# Access email safely via the user relationship #}
                         {% if creds.user and creds.user.email %}
                             {{ creds.user.email }}
-                        {% else %}
-                            <span class="text-muted">N/A</span>
-                        {% endif %}
+                        {% else %}<span class="text-muted">N/A</span>{% endif %}
+                    </td>
+                    <td>
+                         {% if creds.user and creds.user.display_name %}
+                            {{ creds.user.display_name }}
+                        {% else %}<span class="text-muted">-</span>{% endif %}
                     </td>
                     <td>{{ creds.role.value }}</td>
                     <td>
@@ -47,10 +55,9 @@
                     </td>
                     <td>{{ creds.created_at.strftime('%Y-%m-%d') if creds.created_at else 'N/A' }}</td>
                     <td>
-                        {# Prevent admin from toggling their own status #}
                         {% if creds.id != current_user.id %}
                             <form action="{{ url_for('admin.toggle_user_active', creds_id=creds.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Toggle active status for user {{ creds.username }}?');">
-                                {{ csrf_token() }}
+                                {{ activation_form.hidden_tag() }}
                                 {% if creds.is_active %}
                                     <button type="submit" class="btn btn-warning btn-sm" data-bs-toggle="tooltip" title="Deactivate"><i class="fas fa-user-slash"></i></button>
                                 {% else %}
@@ -58,11 +65,17 @@
                                 {% endif %}
                             </form>
                         {% else %}
-                             <span class="text-muted" data-bs-toggle="tooltip" title="Cannot change own status">-</span>
+                             <span class="text-muted" data-bs-toggle="tooltip" title="Cannot change own status"><i class="fas fa-ban"></i></span>
                         {% endif %}
-                        {# Add links to view profile, edit roles etc. later #}
-                        <!-- <a href="#" class="btn btn-info btn-sm ms-1" data-bs-toggle="tooltip" title="View Details"><i class="fas fa-eye"></i></a> -->
-                        <!-- <a href="#" class="btn btn-danger btn-sm ms-1" data-bs-toggle="tooltip" title="Delete User"><i class="fas fa-trash-alt"></i></a> -->
+                         {# Link to edit user #}
+                         <a href="{{ url_for('admin.edit_user', creds_id=creds.id) }}" class="btn btn-primary btn-sm ms-1" data-bs-toggle="tooltip" title="Edit User"><i class="fas fa-edit"></i></a>
+                         {# Link to view user details #}
+                         <a href="{{ url_for('admin.view_user_details', creds_id=creds.id) }}" class="btn btn-info btn-sm ms-1" data-bs-toggle="tooltip" title="View Details"><i class="fas fa-eye"></i></a>
+                         {# Delete button - requires careful implementation #}
+                         <!-- <form action="#" method="POST" class="d-inline" onsubmit="return confirm('DELETE user {{ creds.username }} permanently? This cannot be undone.');">
+                              {{ activation_form.hidden_tag() }} {# Reuse or create delete form #}
+                              <button type="submit" class="btn btn-danger btn-sm ms-1" data-bs-toggle="tooltip" title="Delete User"><i class="fas fa-trash-alt"></i></button>
+                         </form> -->
                     </td>
                 </tr>
                 {% endfor %}
@@ -70,27 +83,39 @@
         </table>
     </div>
 
-    {# Render pagination controls #}
-    {{ render_pagination(pagination, 'admin.view_users') }}
+    {# Corrected way #}
+
+{# ... inside content block, before pagination call ... #}
+{# Build the query_params dictionary without 'do' #}
+{% set query_args = {} %}
+{% if q %}
+    {% set _ = query_args.update({'q': q}) %} {# Assign result to dummy var _ #}
+{% endif %}
+{% if role_filter %}
+    {% set _ = query_args.update({'role': role_filter}) %}
+{% endif %}
+{% if active_filter %}
+    {% set _ = query_args.update({'active': active_filter}) %}
+{% endif %}
+
+{# Pass the dictionary to the macro #}
+{{ render_pagination(pagination, 'admin.view_users', query_params=query_args) }}
+{# ... #}
 
     {% else %}
-    <p class="text-center text-muted">No users found.</p>
+    <p class="text-center text-muted">No users found{% if q %} matching your search{% endif %}.</p>
     {% endif %}
 
      <div class="mt-4">
         <a href="{{ url_for('admin.dashboard') }}" class="btn btn-secondary">Back to Admin Dashboard</a>
     </div>
-
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ super() }}
 <script>
-  // Optional: Initialize Bootstrap tooltips
   var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-    return new bootstrap.Tooltip(tooltipTriggerEl)
-  })
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl) })
 </script>
 {% endblock %}

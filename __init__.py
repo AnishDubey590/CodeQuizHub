@@ -163,6 +163,8 @@ def create_app(config_name=None):
         return dict(UserRole=UserRole)
 
     print(f" * Running in {config_name} mode")
+    if not app.jinja_env.extensions.get('jinja2.ext.do'): # Check if already added
+        app.jinja_env.add_extension('jinja2.ext.do') # Add this line
     # Only print DB URI in non-prod for security
     if config_name != 'prod':
         print(f" * Database URI: {app.config.get('SQLALCHEMY_DATABASE_URI', 'Not Set')}")

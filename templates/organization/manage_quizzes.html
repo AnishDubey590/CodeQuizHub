@@ -1,0 +1,63 @@
+{# File: CodeQuizHub/templates/organization/manage_quizzes.html #}
+{% extends "base.html" %}
+{% from "macros/_pagination.html" import render_pagination %}
+
+{% block title %}{{ title }} - {{ org.name if org else 'Organization' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1>{{ title }}</h1>
+            {% if org %}<h5 class="text-muted">{{ org.name }}</h5>{% endif %}
+        </div>
+        {# Link to where Teachers (or Org Admins if they can also create) create quizzes #}
+        {# This might be a teacher blueprint route or an org blueprint route #}
+        <a href="{{ url_for('teacher.create_quiz') if 'create_quiz' in url_for('teacher', _method='GET', _fail_quietly=True) else '#' }}" class="btn btn-primary {{ 'disabled' if not ('create_quiz' in url_for('teacher', _method='GET', _fail_quietly=True)) }}">
+            <i class="fas fa-plus-circle me-1"></i> Create New Quiz
+        </a>
+    </div>
+
+    {# Flash messages handled by base.html #}
+
+    {% if quizzes %}
+    <div class="list-group">
+      {% for quiz in quizzes %}
+        <div class="list-group-item list-group-item-action flex-column align-items-start">
+           <div class="d-flex w-100 justify-content-between">
+               <h5 class="mb-1">{{ quiz.title }}</h5>
+               <small class="text-muted">{{ quiz.created_at.strftime('%Y-%m-%d') }}</small>
+           </div>
+           <p class="mb-1 text-muted small">{{ quiz.description | truncate(120) if quiz.description else 'No description provided.' }}</p>
+           <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <span class="badge rounded-pill bg-{{ 'success' if quiz.status == QuizStatus.PUBLISHED else ('secondary' if quiz.status == QuizStatus.DRAFT else 'dark') }}">
+                        {{ quiz.status.value }}
+                    </span>
+                    <span class="badge rounded-pill bg-info text-dark">{{ quiz.questions.count() }} Questions</span>
+                    <span class="badge rounded-pill bg-light text-dark border">{{ quiz.duration_minutes }} min</span>
+                </div>
+                <div>
+                    {# TODO: Add links to Edit, View Results, Assign #}
+                    <a href="#" class="btn btn-sm btn-outline-primary disabled"><i class="fas fa-edit"></i> Edit</a>
+                    <a href="#" class="btn btn-sm btn-outline-secondary disabled ms-1"><i class="fas fa-chart-bar"></i> Results</a>
+                    <a href="#" class="btn btn-sm btn-outline-success disabled ms-1"><i class="fas fa-user-plus"></i> Assign</a>
+                </div>
+           </div>
+        </div>
+      {% endfor %}
+    </div>
+
+     {# Build query_args if this page had filters #}
+    {% set query_args = {} %}
+    {{ render_pagination(pagination, '.manage_quizzes', query_params=query_args) }}
+
+    {% else %}
+        <p class="text-center text-muted">No quizzes found for this organization. <a href="#">Create one now!</a></p>
+    {% endif %}
+
+    <div class="mt-4">
+        <a href="{{ url_for('.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

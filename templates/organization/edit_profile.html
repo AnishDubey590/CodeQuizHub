@@ -1,0 +1,54 @@
+{# File: CodeQuizHub/templates/organization/edit_profile.html #}
+{% extends "base.html" %}
+{% from "macros/_formhelpers.html" import render_field %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+             <div class="card shadow-sm">
+                 <div class="card-header d-flex justify-content-between align-items-center">
+                     <h2>{{ title }}</h2>
+                     <a href="{{ url_for('.dashboard') }}" class="btn btn-sm btn-outline-secondary">Cancel</a>
+                </div>
+                 <div class="card-body">
+                     {# Flash messages handled by base.html #}
+                     <form method="POST" action="{{ url_for('.edit_org_profile') }}" novalidate enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+
+                        {% call render_field(form.name) %}
+                            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                        {% endcall %}
+
+                         {% call render_field(form.description) %}
+                            {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows=4) }}
+                        {% endcall %}
+
+                         {% call render_field(form.website_url) %}
+                            {{ form.website_url(class="form-control" + (" is-invalid" if form.website_url.errors else ""), placeholder="https://example.com") }}
+                        {% endcall %}
+
+                         {#
+                         {% if form.logo %} {# Check if logo field exists on the form #}
+                         {# {% call render_field(form.logo, label_visible=true) %} #}
+                         {#    {% if org and org.logo_url %} #}
+                         {#        <p>Current logo:</p> #}
+                         {#        <img src="{{ org.logo_url }}" alt="{{ org.name }} logo" class="img-thumbnail mb-2" style="max-height: 100px;"> #}
+                         {#    {% endif %} #}
+                         {#    {{ form.logo(class="form-control" + (" is-invalid" if form.logo.errors else "")) }} #}
+                         {# {% endcall %} #}
+                         {# {% endif %} #}
+                         #}
+
+                         <div class="mt-4 d-grid"> {# d-grid for full-width button #}
+                             {{ form.submit(class="btn btn-primary") }}
+                         </div>
+                     </form>
+                 </div>
+             </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

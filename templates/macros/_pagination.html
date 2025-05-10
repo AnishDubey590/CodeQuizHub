@@ -1,31 +1,27 @@
 {# File: CodeQuizHub/templates/macros/_pagination.html #}
-{% macro render_pagination(pagination, endpoint, fragment='') %}
+{% macro render_pagination(pagination, endpoint, fragment='', query_params=None) %}
+  {% set query_params = query_params or {} %}
   {% if pagination and pagination.pages > 1 %}
   <nav aria-label="Page navigation">
-    <ul class="pagination justify-content-center"> {# Or adjust alignment #}
-      {# Previous Page Link #}
+    <ul class="pagination justify-content-center flex-wrap">
       <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for(endpoint, page=pagination.prev_num, **request.view_args) }}{{ fragment }}" aria-label="Previous">
+        <a class="page-link" href="{{ url_for(endpoint, page=pagination.prev_num, **query_params) }}{{ fragment }}" aria-label="Previous">
           <span aria-hidden="true">«</span>
         </a>
       </li>
-
-      {# Page Number Links #}
       {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %}
         {% if page_num %}
           {% if pagination.page == page_num %}
           <li class="page-item active" aria-current="page"><span class="page-link">{{ page_num }}</span></li>
           {% else %}
-          <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=page_num, **request.view_args) }}{{ fragment }}">{{ page_num }}</a></li>
+          <li class="page-item"><a class="page-link" href="{{ url_for(endpoint, page=page_num, **query_params) }}{{ fragment }}">{{ page_num }}</a></li>
           {% endif %}
         {% else %}
-          <li class="page-item disabled"><span class="page-link">...</span></li> {# Ellipsis for skipped pages #}
+          <li class="page-item disabled"><span class="page-link"><i class="fas fa-ellipsis-h"></i></span></li>
         {% endif %}
       {% endfor %}
-
-      {# Next Page Link #}
       <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
-        <a class="page-link" href="{{ url_for(endpoint, page=pagination.next_num, **request.view_args) }}{{ fragment }}" aria-label="Next">
+        <a class="page-link" href="{{ url_for(endpoint, page=pagination.next_num, **query_params) }}{{ fragment }}" aria-label="Next">
           <span aria-hidden="true">»</span>
         </a>
       </li>

@@ -1,0 +1,61 @@
+{# File: CodeQuizHub/templates/admin/edit_user.html #}
+{% extends "base.html" %}
+{% from "macros/_formhelpers.html" import render_field %} {# Use caller macro #}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-7">
+            <div class="card">
+                 <div class="card-header"><h2>{{ title }}</h2></div>
+                 <div class="card-body">
+                     <form method="POST" action="{{ url_for('admin.edit_user', creds_id=creds_id) }}" novalidate>
+                         {{ form.hidden_tag() }}
+
+                         {# Use caller block to render fields from AdminEditUserForm #}
+                         {% call render_field(form.username) %}
+                             {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
+                         {% endcall %}
+
+                         {% call render_field(form.email) %}
+                             {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+                         {% endcall %}
+
+                         {% call render_field(form.display_name) %}
+                             {{ form.display_name(class="form-control" + (" is-invalid" if form.display_name.errors else "")) }}
+                         {% endcall %}
+
+                         {% call render_field(form.role) %}
+                             {{ form.role(class="form-select" + (" is-invalid" if form.role.errors else "")) }} {# Use form-select for select fields #}
+                         {% endcall %}
+
+                         {# Checkbox needs special handling for Bootstrap styling #}
+                         <div class="form-check mb-3">
+                            {{ form.is_active(class="form-check-input" + (" is-invalid" if form.is_active.errors else "")) }}
+                            {{ form.is_active.label(class="form-check-label") }}
+                            {% if form.is_active.errors %}
+                              <div class="invalid-feedback d-block">
+                                {% for error in form.is_active.errors %}<span>{{ error }}</span><br>{% endfor %}
+                              </div>
+                            {% endif %}
+                         </div>
+
+                         {# TODO: Add Organization selector if needed #}
+                         {# {% call render_field(form.organization_id) %}
+                         #    {{ form.organization_id(class="form-select" + (" is-invalid" if form.organization_id.errors else "")) }}
+                         # {% endcall %} #}
+
+
+                         <div class="mt-4">
+                             {{ form.submit(class="btn btn-primary") }}
+                             <a href="{{ url_for('admin.view_users') }}" class="btn btn-secondary">Cancel</a>
+                         </div>
+                     </form>
+                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

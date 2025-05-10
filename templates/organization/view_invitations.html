@@ -1,0 +1,86 @@
+{# File: CodeQuizHub/templates/organization/view_invitations.html #}
+{% extends "base.html" %}
+{% from "macros/_pagination.html" import render_pagination %}
+
+{% block title %}{{ title }} - {{ org.name if org else 'Organization' }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1>{{ title }}</h1>
+            {% if org %}<h5 class="text-muted">{{ org.name }}</h5>{% endif %}
+        </div>
+        <a href="{{ url_for('.manage_members') }}" class="btn btn-sm btn-secondary">Back to Members</a>
+    </div>
+
+    {# Flash messages handled by base.html #}
+
+    {% if invitations %}
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle small">
+            <thead>
+                <tr>
+                    <th>Email Invited</th>
+                    <th>Invited As Role</th>
+                    <th>Status</th>
+                    <th>Sent At</th>
+                    <th>Expires At</th>
+                    <th>Invited By</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invite in invitations %}
+                <tr>
+                    <td>{{ invite.invitee_email }}</td>
+                    <td>{{ invite.invited_as_role.value }}</td>
+                    <td>
+                        <span class="badge rounded-pill bg-{{ 'warning text-dark' if invite.status == InvitationStatus.PENDING else ('success' if invite.status == InvitationStatus.ACCEPTED else ('secondary' if invite.status == InvitationStatus.EXPIRED or invite.status == InvitationStatus.DECLINED else 'danger')) }}">
+                           {{ invite.status.name }} {# Or .value for display name #}
+                       </span>
+                    </td>
+                    <td>{{ invite.created_at.strftime('%Y-%m-%d %H:%M') if invite.created_at else '-' }}</td>
+                    <td>{{ invite.expires_at.strftime('%Y-%m-%d %H:%M') if invite.expires_at else '-' }}</td>
+                    <td>{{ invite.inviter.credentials.username if invite.inviter and invite.inviter.credentials else '-' }}</td>
+                    <td>
+                        {% if invite.status == InvitationStatus.PENDING and current_user.role == UserRole.ORGANIZATION %}
+                            <form action="{{ url_for('.cancel_invitation', invite_id=invite.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Cancel invitation for {{ invite.invitee_email }}?');">
+                                {# Assuming CancelActionCSRFForm is available or use a generic form #}
+                                {# For simplicity, if not using a specific form instance passed to this template for cancel: #}
+                                {{ OrgApprovalForm().hidden_tag() if OrgApprovalForm else csrf_token() }}
+                                <button type="submit" class="btn btn-danger btn-sm py-0 px-1" data-bs-toggle="tooltip" title="Cancel Invite"><i class="fas fa-times"></i></button>
+                            </form>
+                            {# TODO: Add Resend Invite Button/Logic #}
+                        {% else %}
+                            <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Build query_args if this page had filters #}
+    {% set query_args = {} %}
+    {{ render_pagination(pagination, '.view_invitations', query_params=query_args) }}
+
+    {% else %}
+        <p class="text-center text-muted">No invitations found for this organization.</p>
+    {% endif %}
+
+     <div class="mt-4">
+        <a href="{{ url_for('.dashboard') }}" class="btn btn-secondary"><i class="fas fa-arrow-left me-1"></i>Back to Dashboard</a>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+  var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+  var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) { return new bootstrap.Tooltip(tooltipTriggerEl) })
+</script>
+{% endblock %}

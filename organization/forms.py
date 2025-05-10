@@ -1,33 +1,68 @@
-# /your_app/organization/forms.py
+# File: CodeQuizHub/organization/forms.py
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileRequired, FileAllowed
-from wtforms import StringField, TextAreaField, SubmitField, SelectField, SelectMultipleField, widgets
-from wtforms.validators import DataRequired, Length, Email, Optional as WtformsOptional, ValidationError
-from ..models import User, Organization, UserRole # For validation if needed
+from wtforms import StringField, TextAreaField, SubmitField, SelectField
+from wtforms.validators import DataRequired, Length, Email, Optional as WtformsOptional, URL, ValidationError
+from ..models import User, Organization, UserRole
 
-# Form previously defined in auth/forms.py, moving relevant parts here if needed,
-# but better to keep InviteUserForm in auth or a shared location if used elsewhere.
-# For now, assuming InviteUserForm remains in auth/forms.py as used by org routes.
-
-class OrgProfileEditForm(FlaskForm):
-    """Form for editing organization profile details."""
-    # Prevent changing unique name easily? Or add specific validation.
-    # name = StringField('Organization Name', validators=[DataRequired(), Length(max=100)])
-    description = TextAreaField('Organization Description', validators=[WtformsOptional(), Length(max=1000)])
-    website_url = StringField('Website URL', validators=[WtformsOptional(), Length(max=512)]) # Add URL validator if desired
-    # TODO: Add FileField for logo upload if implementing logo handling
-    # logo = FileField('Upload Logo', validators=[FileAllowed(['jpg', 'png', 'jpeg', 'gif'], 'Images only!')])
-    submit = SubmitField('Update Profile')
-
-    # Add custom validation if needed (e.g., check if name already taken if allowing edits)
-
+class InviteUserForm(FlaskForm):
+    # ... (definition as before) ...
+    email = StringField('Invitee Email Address', validators=[DataRequired(message="Email address is required."), Email(message="Invalid email address format."), Length(max=120)])
+    role = SelectField('Assign Role', choices=[(UserRole.TEACHER.name, UserRole.TEACHER.value), (UserRole.STUDENT.name, UserRole.STUDENT.value)], validators=[DataRequired(message="Please select a role.")])
+    submit = SubmitField('Send Invitation')
 
 class BulkInviteForm(FlaskForm):
-    """Form for uploading CSV/Excel file for bulk invitations."""
-    file = FileField('Upload CSV or Excel File', validators=[
-        FileRequired(),
-        FileAllowed(['csv', 'xlsx', 'xls'], 'CSV or Excel files only!')
+    # ... (definition as before) ...
+    file = FileField('Upload Member File (CSV/Excel)', validators=[FileRequired(message="Please select a file to upload."), FileAllowed(['csv', 'xlsx', 'xls'], 'Only CSV or Excel (.csv, .xlsx, .xls) files are allowed!')])
+    submit = SubmitField('Upload and Send Invitations')
+
+class OrgProfileEditForm(FlaskForm):
+    # ... (definition as before) ...
+    name = StringField('Organization Name', validators=[DataRequired(message="Organization name cannot be empty."), Length(max=100)])
+    description = TextAreaField('Organization Description', validators=[WtformsOptional(), Length(max=1000)])
+    website_url = StringField('Website URL', validators=[WtformsOptional(), URL(message="Please enter a valid URL (e.g., https://example.com)."), Length(max=512)])
+    submit = SubmitField('Update Organization Profile')
+# File: CodeQuizHub/organization/forms.py
+from flask_wtf import FlaskForm
+from flask_wtf.file import FileField, FileRequired, FileAllowed
+from wtforms import StringField, TextAreaField, SubmitField, SelectField, PasswordField
+from wtforms.validators import DataRequired, Length, Email, Optional as WtformsOptional, URL, EqualTo, ValidationError
+from ..models import User, Organization, UserRole, Credentials # Added Credentials
+
+# --- Form for an Organization Admin to Create a New User (Teacher or Student) ---
+class CreateOrgUserForm(FlaskForm):
+    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=80)])
+    email = StringField('Email Address', validators=[DataRequired(), Email(), Length(max=120)])
+    display_name = StringField('Display Name (Optional)', validators=[WtformsOptional(), Length(max=100)])
+    password = PasswordField('Password', validators=[DataRequired(), Length(min=8)])
+    confirm_password = PasswordField('Confirm Password', validators=[DataRequired(), EqualTo('password', message='Passwords must match.')])
+    role = SelectField('Assign Role', choices=[
+                            (UserRole.TEACHER.name, UserRole.TEACHER.value),
+                            (UserRole.STUDENT.name, UserRole.STUDENT.value)
+                         ], validators=[DataRequired()])
+    # Add student_code if applicable for students
+    student_code = StringField('Student Code (Optional)', validators=[WtformsOptional(), Length(max=50)])
+    submit = SubmitField('Create User Account')
+
+    def validate_username(self, username):
+        # Check if username already exists in Credentials
+        if Credentials.query.filter_by(username=username.data).first():
+            raise ValidationError('That username is already taken. Please choose a different one.')
+
+    def validate_email(self, email):
+        # Check if email already exists in User table (globally, or within org based on policy)
+        # For simplicity, checking globally for now.
+        if User.query.filter_by(email=email.data).first():
+            raise ValidationError('That email address is already registered. Please use a different one.')
+
+
+
+# --- Form for Bulk Invitation/Creation Upload (modified for creation) ---
+class BulkUserCreateForm(FlaskForm):
+    file = FileField('Upload Member File (CSV/Excel)', validators=[
+        FileRequired(message="Please select a file to upload."),
+        FileAllowed(['csv', 'xlsx', 'xls'], 'Only CSV or Excel (.csv, .xlsx, .xls) files are allowed!')
     ])
-    # Optionally add a select field if you want the admin to specify the role for ALL users in the file
-    # role = SelectField('Assign Role to All', choices=[(UserRole.TEACHER.value, 'Teacher'), (UserRole.STUDENT.value, 'Student')], default=UserRole.STUDENT.value)
-    submit = SubmitField('Upload and Process Invitations')
+    # Role will be specified in the file
+    submit = SubmitField('Upload and Create Accounts')
+

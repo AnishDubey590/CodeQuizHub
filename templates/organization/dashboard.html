@@ -1,75 +1,97 @@
-<!-- templates/organization/dashboard.html -->
+{# File: CodeQuizHub/templates/organization/dashboard.html #}
 {% extends "base.html" %}
 
-{% block title %}{{ organization.name }} - Dashboard{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 
 {% block content %}
 <div class="container mt-4">
-    <h1>{{ organization.name }} - Dashboard</h1>
-    <p class="lead">Manage your students, quizzes, and results.</p>
-    <hr>
-
-     <div class="row g-3">
-        <div class="col-md-4">
-            <div class="card text-dark bg-light mb-3">
-                 <div class="card-header">Students</div>
-                 <div class="card-body">
-                     <h5 class="card-title">{{ student_count }}</h5>
-                     <p class="card-text">Registered students in your organization.</p>
-                     <a href="#" class="btn btn-sm btn-primary disabled">Manage Students (TODO)</a>
-                 </div>
+    {% if org %}
+        <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+            <div>
+                <h1 class="mb-0">{{ org.name }}</h1>
+                <span class="badge 
+                    {% if org.approval_status == org.approval_status.accepted %}bg-success
+                    {% endif %}">
+                    {{ org.approval_status.value }}
+                </span>
             </div>
+            {% if current_user.role == UserRole.ORGANIZATION %} {# Only Org Admin can edit org profile #}
+                 <a href="{{ url_for('organization.edit_org_profile') }}" class="btn btn-sm btn-outline-secondary"><i class="fas fa-edit me-1"></i>Edit Org Profile</a>
+            {% endif %}
         </div>
-        <div class="col-md-4">
-             <div class="card text-dark bg-light mb-3">
-                 <div class="card-header">Quizzes</div>
-                 <div class="card-body">
-                     <h5 class="card-title">{{ quiz_count }}</h5>
-                     <p class="card-text">Quizzes created by your organization.</p>
-                     <a href="#" class="btn btn-sm btn-success disabled">Create Quiz (TODO)</a>
-                     <a href="#" class="btn btn-sm btn-info disabled">View All (TODO)</a>
-                 </div>
-            </div>
-        </div>
-         <div class="col-md-4">
-             <div class="card text-dark bg-light mb-3">
-                 <div class="card-header">Analytics</div>
-                 <div class="card-body">
-                     <h5 class="card-title">Results</h5>
-                     <p class="card-text">Analyze student performance data.</p>
-                      <a href="#" class="btn btn-sm btn-secondary disabled">View Analytics (TODO)</a>
-                 </div>
-            </div>
-        </div>
-    </div>
-
-    <h2 class="mt-5">Recent Quizzes</h2>
-    {% if recent_quizzes %}
-    <ul class="list-group">
-        {% for quiz in recent_quizzes %}
-            <li class="list-group-item d-flex justify-content-between align-items-center">
-                <div>
-                    <strong>{{ quiz.title }}</strong> ({{ quiz.status.name }})
-                    <small class="d-block text-muted">Created: {{ quiz.created_at.strftime('%Y-%m-%d') }}</small>
-                </div>
-                 <span>
-                     <a href="#" class="btn btn-sm btn-outline-primary disabled">View (TODO)</a>
-                     <a href="#" class="btn btn-sm btn-outline-secondary disabled">Results (TODO)</a>
-                 </span>
-            </li>
-        {% endfor %}
-    </ul>
+         <p>Welcome, {{ current_user.username }}! (Your Role: {{ current_user.role.value }})</p>
     {% else %}
-    <p>No quizzes created yet.</p>
+         <h1>Organization Dashboard</h1>
+         <div class="alert alert-danger">Organization details could not be loaded for your account. Please contact support if this persists.</div>
     {% endif %}
 
-     <h2 class="mt-5">Quick Actions</h2>
-    <div class="list-group">
-        <a href="#" class="list-group-item list-group-item-action disabled">Add New Student (TODO)</a>
-        <a href="#" class="list-group-item list-group-item-action disabled">Create New Quiz (TODO)</a>
-        <a href="#" class="list-group-item list-group-item-action disabled">Manage Question Bank (TODO)</a>
-        <a href="#" class="list-group-item list-group-item-action disabled">View Organization Settings (TODO)</a>
-    </div>
+    {# Flash messages are handled by base.html #}
 
+    {% if org %} {# Only show stats if org is loaded #}
+     <div class="row gy-4 mb-4">
+        <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-users me-2 text-primary"></i>Total Members</h5>
+                    <p class="card-text fs-3 fw-bold">{{ member_count | default('N/A') }}</p>
+                </div>
+                 <div class="card-footer bg-transparent border-top-0">
+                     <a href="{{ url_for('.manage_members') }}" class="btn btn-primary btn-sm">Manage Members</a>
+                </div>
+            </div>
+        </div>
+         <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-chalkboard-teacher me-2 text-info"></i>Teachers</h5>
+                    <p class="card-text fs-3 fw-bold">{{ teacher_count | default('N/A') }}</p>
+                </div>
+            </div>
+        </div>
+         <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-user-graduate me-2 text-success"></i>Students</h5>
+                    <p class="card-text fs-3 fw-bold">{{ student_count | default('N/A') }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                 <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-envelope-open-text me-2 text-warning"></i>Pending Invites</h5>
+                    <p class="card-text fs-3 fw-bold">{{ pending_invites | default('N/A') }}</p>
+                </div>
+                  <div class="card-footer bg-transparent border-top-0">
+                      <a href="{{ url_for('.view_invitations') }}" class="btn btn-warning btn-sm text-dark">View Invitations</a>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                 <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-file-alt me-2 text-secondary"></i>Total Quizzes</h5>
+                    <p class="card-text fs-3 fw-bold">{{ quiz_count | default('N/A') }}</p>
+                    <small>({{ published_quiz_count | default(0) }} Published)</small>
+                </div>
+                 <div class="card-footer bg-transparent border-top-0">
+                     <a href="{{ url_for('.manage_quizzes') }}" class="btn btn-secondary btn-sm">Manage Quizzes</a>
+                </div>
+            </div>
+        </div>
+         <div class="col-sm-6 col-lg-4 col-xl-3 mb-3">
+             <div class="card text-center h-100 shadow-sm">
+                 <div class="card-body">
+                    <h5 class="card-title"><i class="fas fa-question-circle me-2 text-danger"></i>Question Bank</h5>
+                    {# Accessing questions through organization relationship #}
+                    <p class="card-text fs-3 fw-bold">{{ org.questions.count() if org and org.questions else 'N/A' }}</p>
+                </div>
+                 <div class="card-footer bg-transparent border-top-0">
+                     <a href="{{ url_for('.manage_questions') }}" class="btn btn-danger btn-sm">Manage Questions</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %} {# End of if org #}
 </div>
 {% endblock %}
